@@ -1,0 +1,22 @@
+-- Single Port RAM
+   u_ram_sp : entity work.ram_sp(rtl)
+   generic map (
+      DAT_N_COL => DAT_N_COL,
+      DAT_COL_W => DAT_COL_W,
+      DEPTH     => DEPTH    ,
+      SYNC_RD   => SYNC_RD  ,
+      OUT_REG   => OUT_REG  ,
+      MEM_STYLE => RAM_STYLE,
+      INIT_TYPE => INIT_TYPE,
+      FILE_NAME => FILE_NAME,
+      MEM_INIT  => MEM_INIT 
+   )
+   port map (
+      i_en  => i_en ,
+      i_we  => i_we ,
+      i_adr => i_adr,
+      i_dat => i_dat,
+      o_dat => o_dat,
+
+      i_clk  => i_clk
+   );
