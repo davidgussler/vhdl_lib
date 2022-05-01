@@ -1,7 +1,7 @@
 -- ###############################################################################################
 -- # << Template >> #
 -- *********************************************************************************************** 
--- Copyright 2022
+-- Copyright David N. Gussler 2022
 -- *********************************************************************************************** 
 -- File     : template.vhd
 -- Author   : David Gussler - davidnguss@gmail.com 
@@ -11,10 +11,12 @@
 --            12-18-2021 | 1.0     | Initial 
 -- *********************************************************************************************** 
 -- Description : 
---     Useful description describing the description to describe the module
+--    Useful description describing the description to describe the module
 -- Generics
---     * g_GEN1 => This generic controlls a thing
---     * g_GEN2 => This generic controlls another thing
+--    GEN1 : integer := 1
+--       This generic controlls a thing
+--    GEN2 : integer := 2
+--       This generic controlls another thing
 -- ###############################################################################################
 
 library ieee;
