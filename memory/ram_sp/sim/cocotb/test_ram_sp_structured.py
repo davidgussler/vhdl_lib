@@ -2,8 +2,6 @@
 import os
 import math
 from typing import Any, Dict, List
-import numpy as np
-
 
 # Cocotb related imports
 import cocotb
@@ -15,15 +13,13 @@ from cocotb.regression import TestFactory
 from cocotb.handle import SimHandleBase
 from cocotb.queue import Queue
 from cocotb.types import LogicArray
-from cocotb.types import Array
-from cocotb.types import Logic
 from cocotb.types import Range
 from random import getrandbits
 import logging
 import copy
 
 
-NUM_SAMPLES = 100
+NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 3000))
 G_DAT_N_COL = int(cocotb.top.G_DAT_N_COL)
 G_DAT_COL_W = int(cocotb.top.G_DAT_COL_W)
 G_DEPTH = int(cocotb.top.G_DEPTH)
@@ -185,21 +181,23 @@ class RamTester:
             actual_output = await self.output_mon.data_queue.get()
             actual_output = actual_output["DO"].integer
             module_inputs = await self.input_mon.data_queue.get()
-            expected_output = self.model(
-                en=module_inputs["EN"].integer, 
-                we=module_inputs["WE"].integer, 
-                adr=module_inputs["AD"].integer,
-                dat_in=module_inputs["DI"].integer)
+            if (module_inputs["AD"].integer < G_DEPTH):
+                expected_output = self.model(
+                    en=module_inputs["EN"].integer, 
+                    we=module_inputs["WE"].integer, 
+                    adr=module_inputs["AD"].integer,
+                    dat_in=module_inputs["DI"].integer)
 
-            assert expected_output == actual_output
-            print("en     :",module_inputs["EN"])
-            print("we     :",module_inputs["WE"])
-            print("adr    :",module_inputs["AD"].integer)
-            print("dat in :",module_inputs["DI"].integer)
-            print()
-            print("actual dat out:",actual_output)
-            print("expect dat out:",expected_output)
+                assert expected_output == actual_output
 
+                self.dut._log.info("en     : " + str(module_inputs["EN"]))
+                self.dut._log.info("we     : " + str(module_inputs["WE"]))
+                self.dut._log.info("adr    : " + str(module_inputs["AD"].integer))
+                self.dut._log.info("dat in : " + str(module_inputs["DI"].integer))
+                self.dut._log.info("actual dat out: " + str(actual_output))
+                self.dut._log.info("expect dat out: " + str(expected_output))
+                self.dut._log.info("")
+            
 
 @cocotb.test()
 async def test1(dut):
@@ -224,13 +222,14 @@ async def test1(dut):
     #await RisingEdge(dut.i_clk)
     tester.start()
 
-    dut._log.info("Test starting")
-
-    print(G_DAT_N_COL)
-    print(G_DAT_COL_W) 
-    print(G_DEPTH)
-    print(G_RD_LATENCY)
-
+    dut._log.info("TEST STARTING")
+    dut._log.info("Generics Selected:")
+    dut._log.info("G_DAT_N_COL : " + str(G_DAT_N_COL))
+    dut._log.info("G_DAT_COL_W : " + str(G_DAT_COL_W) )
+    dut._log.info("G_DEPTH     : " + str(G_DEPTH))
+    dut._log.info("G_RD_LATENCY: " + str(G_RD_LATENCY))
+    dut._log.info("")
+    
     # Apply stimulus
     for i, (EN, WE, AD, DI) in enumerate(zip(gen_en(), gen_we(), gen_adr(), gen_data_in())):
         await RisingEdge(dut.i_clk)
@@ -239,7 +238,7 @@ async def test1(dut):
         dut.i_adr.value = AD
         dut.i_dat.value = DI
 
-        if i % 1 == 0:
+        if i % 10 == 0:
             dut._log.info(f"{i} / {NUM_SAMPLES}")
         
 
@@ -258,9 +257,9 @@ def gen_en(num_samples=NUM_SAMPLES, width=1):
 
 def gen_we(num_samples=NUM_SAMPLES, width=G_DAT_N_COL):
     for _ in range(num_samples):
-        yield  getrandbits(width) # LogicArray("1111") #
+        yield  getrandbits(width) 
 
-def gen_adr(num_samples=NUM_SAMPLES, width=math.ceil(math.log2(G_DEPTH))):
+def gen_adr(num_samples=NUM_SAMPLES, width=math.floor(math.log2(G_DEPTH))):
     for _ in range(num_samples):
         yield getrandbits(width)
 

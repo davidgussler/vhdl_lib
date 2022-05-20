@@ -7,13 +7,12 @@ TOPLEVEL_LANG ?= vhdl
 # Simulator choice 
 SIM ?= questa
 
-
 # Generics 
+export NUM_SAMPLES        ?= 2000
 export GENERIC_DAT_N_COL  ?= 4
 export GENERIC_DAT_COL_W  ?= 7
-export GENERIC_DEPTH      ?= 8
+export GENERIC_DEPTH      ?= 9
 export GENERIC_RD_LATENCY ?= 3
-
 
 ifeq ($(TOPLEVEL_LANG),vhdl)
    # Set Sources
@@ -40,7 +39,13 @@ ifeq ($(TOPLEVEL_LANG),vhdl)
       SIM_ARGS   += --vcd=wave.vcd
    else ifneq ($(filter $(SIM),questa modelsim riviera activehdl),)
       COMPILE_ARGS += -2008
-		WAVES := 1
+      COMPILE_ARGS += +cover=sbceft
+
+
+      SIM_ARGS += -coverage
+      #SIM_ARGS += -ucdbfile cov_file
+      SIM_ARGS += -testname coverage
+      SIM_ARGS += -coverstore $(PWD)
    endif
 else
     $(error "A valid value (vhdl) was not provided for TOPLEVEL_LANG=$(TOPLEVEL_LANG)")

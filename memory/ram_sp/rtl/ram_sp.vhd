@@ -14,6 +14,7 @@
 --    A highly configurable single port RAM. See descriptions of the generics below for help
 --    with configuring the RAM to your needs.
 --    Please see "ram_sp_tb.vhd" for example instantiations of this module.
+--
 -- Generics
 --    G_DAT_N_COL  : integer range 1 to 64 := 4
 --       Number of data columns per memory word; Each column can be exclusivly 
@@ -105,7 +106,7 @@ entity ram_sp is
    port(
       i_en  : in std_logic;
       i_we  : in std_logic_vector(G_DAT_N_COL-1 downto 0);
-      i_adr : in std_logic_vector(ceil_log2(G_DEPTH)-1 downto 0);
+      i_adr : in std_logic_vector(clog2(G_DEPTH)-1 downto 0);
       i_dat : in std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
       o_dat : out std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
 
@@ -212,7 +213,7 @@ begin
          severity warning; 
       assert (not (to_integer(unsigned(i_adr)) > G_DEPTH))
          report "Address is out of range (this could happen if G_DEPTH is not a power of 2" &
-            " and an address larger than G_DEPTH was used)."
+            " and an address larger than G_DEPTH was used). This will produce unexpected behavior"
          severity warning; 
       -- pragma translate_on 
    end generate;    

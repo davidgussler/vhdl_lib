@@ -39,7 +39,7 @@ entity test_ram_sp_tb is
    port(
       i_en  : in std_logic;
       i_we  : in std_logic_vector(G_DAT_N_COL-1 downto 0);
-      i_adr : in std_logic_vector(ceil_log2(G_DEPTH)-1 downto 0);
+      i_adr : in std_logic_vector(clog2(G_DEPTH)-1 downto 0);
       i_dat : in std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
       o_dat : out std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
 
