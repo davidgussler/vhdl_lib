@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="123456789" />
+    <testcase name="test1" classname="test_ram_sp_structured" file="/home/david/prj_wsl/fpga_dev/reuse/memory/ram_sp/sim/coco/test_ram_sp_structured.py" lineno="204" time="3.483459949493408" sim_time_ns="10001.0" ratio_time="2870.99612023799" />
+  </testsuite>
+</testsuites>
