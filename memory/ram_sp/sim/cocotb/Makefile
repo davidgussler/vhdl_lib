@@ -8,7 +8,7 @@ TOPLEVEL_LANG ?= vhdl
 SIM ?= questa
 
 # Generics 
-export NUM_SAMPLES        ?= 2000
+export NUM_SAMPLES        ?= 1000
 export GENERIC_DAT_N_COL  ?= 4
 export GENERIC_DAT_COL_W  ?= 7
 export GENERIC_DEPTH      ?= 9
