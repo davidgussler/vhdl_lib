@@ -1,0 +1,884 @@
+# do sim_build/runsim.do
+# Questa Intel Starter FPGA Edition-64 vmap 2021.2 Lib Mapping Utility 2021.04 Apr 14 2021
+# vmap -c 
+# ** Warning: vmap will not overwrite local modelsim.ini.
+# Questa Intel Starter FPGA Edition-64 vmap 2021.2 Lib Mapping Utility 2021.04 Apr 14 2021
+# vmap work sim_build/work 
+# Modifying modelsim.ini
+# Questa Intel Starter FPGA Edition-64 vcom 2021.2 Compiler 2021.04 Apr 14 2021
+# Start time: 14:11:53 on May 20,2022
+# vcom -work work -2008 "+acc" /home/david/prj_wsl/fpga_dev/reuse/memory/ram_sp/sim/coco/../../../../gen_logic/gen_utils_pkg.vhd /home/david/prj_wsl/fpga_dev/reuse/memory/ram_sp/sim/coco/../../../mem_utils_pkg.vhd /home/david/prj_wsl/fpga_dev/reuse/memory/ram_sp/sim/coco/../../rtl/ram_sp.vhd /home/david/prj_wsl/fpga_dev/reuse/memory/ram_sp/sim/coco/test_ram_sp_tb.vhd 
+# -- Loading package STANDARD
+# -- Loading package TEXTIO
+# -- Loading package std_logic_1164
+# -- Compiling package gen_utils_pkg
+# -- Compiling package body gen_utils_pkg
+# -- Loading package gen_utils_pkg
+# -- Compiling package mem_utils_pkg
+# -- Compiling package body mem_utils_pkg
+# -- Loading package mem_utils_pkg
+# -- Loading package NUMERIC_STD
+# -- Loading package mem_utils_pkg
+# -- Loading package gen_utils_pkg
+# -- Compiling entity ram_sp
+# -- Compiling architecture rtl of ram_sp
+# -- Loading package gen_utils_pkg
+# -- Compiling entity test_ram_sp_tb
+# -- Compiling architecture bench of test_ram_sp_tb
+# -- Loading entity ram_sp
+# End time: 14:11:53 on May 20,2022, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# vsim -onfinish exit -foreign "cocotb_init /home/david/.local/lib/python3.8/site-packages/cocotb/libs/libcocotbfli_modelsim.so" sim_build/work.test_ram_sp_tb -gG_DAT_N_COL=4 -gG_DAT_COL_W=7 -gG_RD_LATENCY=3 -gG_DEPTH=8 
+# Start time: 14:11:53 on May 20,2022
+# ** Note: (vsim-3812) Design is being optimized...
+# //  Questa Intel Starter FPGA Edition-64
+# //  Version 2021.2 linux_x86_64 Apr 14 2021
+# //
+# //  Copyright 1991-2021 Mentor Graphics Corporation
+# //  All Rights Reserved.
+# //
+# //  QuestaSim and its associated documentation contain trade
+# //  secrets and commercial or financial information that are the property of
+# //  Mentor Graphics Corporation and are privileged, confidential,
+# //  and exempt from disclosure under the Freedom of Information Act,
+# //  5 U.S.C. Section 552. Furthermore, this information
+# //  is prohibited from disclosure under the Trade Secrets Act,
+# //  18 U.S.C. Section 1905.
+# //
+# Loading std.standard
+# Loading std.textio(body)
+# Loading ieee.std_logic_1164(body)
+# Loading ieee.numeric_std(body)
+# Loading work.mem_utils_pkg(body)
+# Loading work.gen_utils_pkg(body)
+# Loading work.test_ram_sp_tb(bench)#1
+# Loading work.ram_sp(rtl)#1
+# Loading /home/david/.local/lib/python3.8/site-packages/cocotb/libs/libcocotbfli_modelsim.so
+#      -.--ns INFO     cocotb.gpi                         ..ib/fli/FliImpl.cpp:1105 in cocotb_init                     cocotb_init called
+#      -.--ns INFO     cocotb.gpi                         ..mbed/gpi_embed.cpp:76   in set_program_name_in_venv        Did not detect Python virtual environment. Using system-wide Python interpreter
+#      -.--ns INFO     cocotb.gpi                         ../gpi/GpiCommon.cpp:99   in gpi_print_registered_impl       FLI registered
+#      0.00ns INFO     Running on ModelSim for Questa Intel Starter FPGA Edition-64 version 2021.2 2021.04
+#      0.00ns INFO     Running tests with cocotb v1.6.2 from /home/david/.local/lib/python3.8/site-packages/cocotb
+#      0.00ns INFO     Seeding Python random module with supplied seed 123456789
+#      0.00ns INFO     Found test test_ram_sp_structured.test1
+#      0.00ns INFO     running test1 (1/1)
+#      0.00ns INFO     Initialize the module values
+#      0.00ns INFO     Test starting
+# 4
+# 7
+# 8
+# 3
+# ** Warning: NUMERIC_STD.TO_INTEGER: metavalue detected, returning 0
+#    Time: 0 ns  Iteration: 0  Region: /test_ram_sp_tb/dut/gen_assertions
+#      0.00ns INFO     0 / 100
+# en     : 1
+# we     : 0111
+# adr    : 4
+# dat in : 190577212
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     10.00ns INFO     1 / 100
+# en     : 1
+# we     : 1110
+# adr    : 6
+# dat in : 246226018
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     20.00ns INFO     2 / 100
+# en     : 1
+# we     : 1001
+# adr    : 3
+# dat in : 265214208
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     30.00ns INFO     3 / 100
+# en     : 1
+# we     : 0100
+# adr    : 5
+# dat in : 125275568
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     40.00ns INFO     4 / 100
+# en     : 0
+# we     : 1000
+# adr    : 2
+# dat in : 214153483
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     50.00ns INFO     5 / 100
+# en     : 0
+# we     : 0111
+# adr    : 4
+# dat in : 184582422
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     60.00ns INFO     6 / 100
+# en     : 0
+# we     : 1010
+# adr    : 4
+# dat in : 265555741
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     70.00ns INFO     7 / 100
+# en     : 0
+# we     : 0100
+# adr    : 4
+# dat in : 49587680
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     80.00ns INFO     8 / 100
+# en     : 0
+# we     : 1011
+# adr    : 4
+# dat in : 38371015
+# 
+# actual dat out: 0
+# expect dat out: 0
+#     90.00ns INFO     9 / 100
+# en     : 1
+# we     : 1101
+# adr    : 2
+# dat in : 221054608
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    100.00ns INFO     10 / 100
+# en     : 1
+# we     : 0111
+# adr    : 4
+# dat in : 81531555
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    110.00ns INFO     11 / 100
+# en     : 1
+# we     : 1111
+# adr    : 0
+# dat in : 76268420
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    120.00ns INFO     12 / 100
+# en     : 0
+# we     : 0110
+# adr    : 5
+# dat in : 208606661
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    130.00ns INFO     13 / 100
+# en     : 0
+# we     : 1101
+# adr    : 0
+# dat in : 27703549
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    140.00ns INFO     14 / 100
+# en     : 1
+# we     : 0110
+# adr    : 4
+# dat in : 17696789
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    150.00ns INFO     15 / 100
+# en     : 0
+# we     : 1001
+# adr    : 4
+# dat in : 81999223
+# 
+# actual dat out: 1833532
+# expect dat out: 1833532
+#    160.00ns INFO     16 / 100
+# en     : 0
+# we     : 1111
+# adr    : 3
+# dat in : 29405637
+# 
+# actual dat out: 1833532
+# expect dat out: 1833532
+#    170.00ns INFO     17 / 100
+# en     : 1
+# we     : 0111
+# adr    : 7
+# dat in : 4585542
+# 
+# actual dat out: 1833532
+# expect dat out: 1833532
+#    180.00ns INFO     18 / 100
+# en     : 0
+# we     : 0100
+# adr    : 1
+# dat in : 178122467
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    190.00ns INFO     19 / 100
+# en     : 1
+# we     : 1111
+# adr    : 1
+# dat in : 16705240
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    200.00ns INFO     20 / 100
+# en     : 0
+# we     : 1000
+# adr    : 5
+# dat in : 23632057
+# 
+# actual dat out: 1839779
+# expect dat out: 1839779
+#    210.00ns INFO     21 / 100
+# en     : 0
+# we     : 0111
+# adr    : 5
+# dat in : 66265883
+# 
+# actual dat out: 1839779
+# expect dat out: 1839779
+#    220.00ns INFO     22 / 100
+# en     : 1
+# we     : 1010
+# adr    : 1
+# dat in : 215444003
+# 
+# actual dat out: 1839779
+# expect dat out: 1839779
+#    230.00ns INFO     23 / 100
+# en     : 1
+# we     : 1110
+# adr    : 1
+# dat in : 96695164
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    240.00ns INFO     24 / 100
+# en     : 1
+# we     : 0001
+# adr    : 7
+# dat in : 88201852
+# 
+# actual dat out: 0
+# expect dat out: 0
+#    250.00ns INFO     25 / 100
+# en     : 1
+# we     : 0101
+# adr    : 6
+# dat in : 137568657
+# 
+# actual dat out: 16705240
+# expect dat out: 16705240
+#    260.00ns INFO     26 / 100
+# en     : 0
+# we     : 1001
+# adr    : 4
+# dat in : 107984021
+# 
+# actual dat out: 215935576
+# expect dat out: 215935576
+#    270.00ns INFO     27 / 100
+# en     : 0
+# we     : 1110
+# adr    : 5
+# dat in : 79845605
+# 
+# actual dat out: 215935576
+# expect dat out: 215935576
+#    280.00ns INFO     28 / 100
+# en     : 0
+# we     : 1001
+# adr    : 4
+# dat in : 116631310
+# 
+# actual dat out: 215935576
+# expect dat out: 215935576
+#    290.00ns INFO     29 / 100
+# en     : 1
+# we     : 1101
+# adr    : 7
+# dat in : 178001112
+# 
+# actual dat out: 215935576
+# expect dat out: 215935576
+#    300.00ns INFO     30 / 100
+# en     : 0
+# we     : 0110
+# adr    : 7
+# dat in : 144080113
+# 
+# actual dat out: 391238
+# expect dat out: 391238
+#    310.00ns INFO     31 / 100
+# en     : 1
+# we     : 0001
+# adr    : 7
+# dat in : 75482675
+# 
+# actual dat out: 391238
+# expect dat out: 391238
+#    320.00ns INFO     32 / 100
+# en     : 0
+# we     : 0110
+# adr    : 3
+# dat in : 257397723
+# 
+# actual dat out: 246225920
+# expect dat out: 246225920
+#    330.00ns INFO     33 / 100
+# en     : 1
+# we     : 0110
+# adr    : 4
+# dat in : 73481593
+# 
+# actual dat out: 246225920
+# expect dat out: 246225920
+#    340.00ns INFO     34 / 100
+# en     : 0
+# we     : 1011
+# adr    : 4
+# dat in : 182064125
+# 
+# actual dat out: 391292
+# expect dat out: 391292
+#    350.00ns INFO     35 / 100
+# en     : 1
+# we     : 0010
+# adr    : 0
+# dat in : 141809547
+# 
+# actual dat out: 391292
+# expect dat out: 391292
+#    360.00ns INFO     36 / 100
+# en     : 1
+# we     : 0100
+# adr    : 7
+# dat in : 746488
+# 
+# actual dat out: 178010200
+# expect dat out: 178010200
+#    370.00ns INFO     37 / 100
+# en     : 0
+# we     : 1111
+# adr    : 4
+# dat in : 266376983
+# 
+# actual dat out: 919587
+# expect dat out: 919587
+#    380.00ns INFO     38 / 100
+# en     : 1
+# we     : 1010
+# adr    : 6
+# dat in : 12307533
+# 
+# actual dat out: 919587
+# expect dat out: 919587
+#    390.00ns INFO     39 / 100
+# en     : 1
+# we     : 1011
+# adr    : 2
+# dat in : 87221730
+# 
+# actual dat out: 76268420
+# expect dat out: 76268420
+#    400.00ns INFO     40 / 100
+# en     : 0
+# we     : 0000
+# adr    : 4
+# dat in : 75012368
+# 
+# actual dat out: 178010163
+# expect dat out: 178010163
+#    410.00ns INFO     41 / 100
+# en     : 0
+# we     : 1010
+# adr    : 4
+# dat in : 188718410
+# 
+# actual dat out: 178010163
+# expect dat out: 178010163
+#    420.00ns INFO     42 / 100
+# en     : 0
+# we     : 1101
+# adr    : 2
+# dat in : 101267397
+# 
+# actual dat out: 178010163
+# expect dat out: 178010163
+#    430.00ns INFO     43 / 100
+# en     : 0
+# we     : 0110
+# adr    : 6
+# dat in : 191151066
+# 
+# actual dat out: 178010163
+# expect dat out: 178010163
+#    440.00ns INFO     44 / 100
+# en     : 0
+# we     : 0001
+# adr    : 2
+# dat in : 212876477
+# 
+# actual dat out: 178010163
+# expect dat out: 178010163
+#    450.00ns INFO     45 / 100
+# en     : 1
+# we     : 0011
+# adr    : 5
+# dat in : 79647103
+# 
+# actual dat out: 178010163
+# expect dat out: 178010163
+#    460.00ns INFO     46 / 100
+# en     : 0
+# we     : 0110
+# adr    : 3
+# dat in : 91110639
+# 
+# actual dat out: 246619153
+# expect dat out: 246619153
+#    470.00ns INFO     47 / 100
+# en     : 1
+# we     : 0101
+# adr    : 1
+# dat in : 35801459
+# 
+# actual dat out: 246619153
+# expect dat out: 246619153
+#    480.00ns INFO     48 / 100
+# en     : 0
+# we     : 1100
+# adr    : 0
+# dat in : 128535662
+# 
+# actual dat out: 221052944
+# expect dat out: 221052944
+#    490.00ns INFO     49 / 100
+# en     : 1
+# we     : 1010
+# adr    : 1
+# dat in : 138993333
+# 
+# actual dat out: 221052944
+# expect dat out: 221052944
+#    500.00ns INFO     50 / 100
+# en     : 1
+# we     : 1100
+# adr    : 0
+# dat in : 16343148
+# 
+# actual dat out: 1540096
+# expect dat out: 1540096
+#    510.00ns INFO     51 / 100
+# en     : 1
+# we     : 1111
+# adr    : 0
+# dat in : 115440274
+# 
+# actual dat out: 96695128
+# expect dat out: 96695128
+#    520.00ns INFO     52 / 100
+# en     : 1
+# we     : 1110
+# adr    : 6
+# dat in : 116374604
+# 
+# actual dat out: 96629619
+# expect dat out: 96629619
+#    530.00ns INFO     53 / 100
+# en     : 0
+# we     : 0111
+# adr    : 6
+# dat in : 197192409
+# 
+# actual dat out: 76273540
+# expect dat out: 76273540
+#    540.00ns INFO     54 / 100
+# en     : 1
+# we     : 1000
+# adr    : 5
+# dat in : 62449494
+# 
+# actual dat out: 76273540
+# expect dat out: 76273540
+#    550.00ns INFO     55 / 100
+# en     : 1
+# we     : 0111
+# adr    : 5
+# dat in : 138892844
+# 
+# actual dat out: 16340868
+# expect dat out: 16340868
+#    560.00ns INFO     56 / 100
+# en     : 1
+# we     : 0011
+# adr    : 1
+# dat in : 68150252
+# 
+# actual dat out: 11734033
+# expect dat out: 11734033
+#    570.00ns INFO     57 / 100
+# en     : 0
+# we     : 1111
+# adr    : 6
+# dat in : 219770284
+# 
+# actual dat out: 1544575
+# expect dat out: 1544575
+#    580.00ns INFO     58 / 100
+# en     : 0
+# we     : 1101
+# adr    : 0
+# dat in : 103358454
+# 
+# actual dat out: 1544575
+# expect dat out: 1544575
+#    590.00ns INFO     59 / 100
+# en     : 0
+# we     : 0101
+# adr    : 4
+# dat in : 257535682
+# 
+# actual dat out: 1544575
+# expect dat out: 1544575
+#    600.00ns INFO     60 / 100
+# en     : 0
+# we     : 1000
+# adr    : 0
+# dat in : 267796594
+# 
+# actual dat out: 1544575
+# expect dat out: 1544575
+#    610.00ns INFO     61 / 100
+# en     : 0
+# we     : 1000
+# adr    : 3
+# dat in : 81022907
+# 
+# actual dat out: 1544575
+# expect dat out: 1544575
+#    620.00ns INFO     62 / 100
+# en     : 1
+# we     : 1011
+# adr    : 1
+# dat in : 41602650
+# 
+# actual dat out: 1544575
+# expect dat out: 1544575
+#    630.00ns INFO     63 / 100
+# en     : 1
+# we     : 1101
+# adr    : 4
+# dat in : 153081498
+# 
+# actual dat out: 62361983
+# expect dat out: 62361983
+#    640.00ns INFO     64 / 100
+# en     : 1
+# we     : 1111
+# adr    : 4
+# dat in : 16269649
+# 
+# actual dat out: 138567411
+# expect dat out: 138567411
+#    650.00ns INFO     65 / 100
+# en     : 1
+# we     : 1110
+# adr    : 2
+# dat in : 124306684
+# 
+# actual dat out: 138568684
+# expect dat out: 138568684
+#    660.00ns INFO     66 / 100
+# en     : 0
+# we     : 0000
+# adr    : 2
+# dat in : 212788209
+# 
+# actual dat out: 81187
+# expect dat out: 81187
+#    670.00ns INFO     67 / 100
+# en     : 0
+# we     : 1111
+# adr    : 6
+# dat in : 223957520
+# 
+# actual dat out: 81187
+# expect dat out: 81187
+#    680.00ns INFO     68 / 100
+# en     : 0
+# we     : 1100
+# adr    : 6
+# dat in : 70737029
+# 
+# actual dat out: 81187
+# expect dat out: 81187
+#    690.00ns INFO     69 / 100
+# en     : 0
+# we     : 1111
+# adr    : 3
+# dat in : 164069938
+# 
+# actual dat out: 81187
+# expect dat out: 81187
+#    700.00ns INFO     70 / 100
+# en     : 0
+# we     : 0011
+# adr    : 0
+# dat in : 44852843
+# 
+# actual dat out: 81187
+# expect dat out: 81187
+#    710.00ns INFO     71 / 100
+# en     : 0
+# we     : 0000
+# adr    : 5
+# dat in : 222277771
+# 
+# actual dat out: 81187
+# expect dat out: 81187
+#    720.00ns INFO     72 / 100
+# en     : 1
+# we     : 0010
+# adr    : 4
+# dat in : 179219822
+# 
+# actual dat out: 81187
+# expect dat out: 81187
+#    730.00ns INFO     73 / 100
+# en     : 0
+# we     : 0010
+# adr    : 1
+# dat in : 232722264
+# 
+# actual dat out: 153091354
+# expect dat out: 153091354
+#    740.00ns INFO     74 / 100
+# en     : 1
+# we     : 1010
+# adr    : 3
+# dat in : 27387645
+# 
+# actual dat out: 153091354
+# expect dat out: 153091354
+#    750.00ns INFO     75 / 100
+# en     : 0
+# we     : 0101
+# adr    : 1
+# dat in : 195813802
+# 
+# actual dat out: 86844898
+# expect dat out: 86844898
+#    760.00ns INFO     76 / 100
+# en     : 0
+# we     : 0000
+# adr    : 2
+# dat in : 228596783
+# 
+# actual dat out: 86844898
+# expect dat out: 86844898
+#    770.00ns INFO     77 / 100
+# en     : 1
+# we     : 1011
+# adr    : 1
+# dat in : 189349031
+# 
+# actual dat out: 86844898
+# expect dat out: 86844898
+#    780.00ns INFO     78 / 100
+# en     : 0
+# we     : 0111
+# adr    : 6
+# dat in : 159608332
+# 
+# actual dat out: 16269649
+# expect dat out: 16269649
+#    790.00ns INFO     79 / 100
+# en     : 0
+# we     : 1101
+# adr    : 3
+# dat in : 67868140
+# 
+# actual dat out: 16269649
+# expect dat out: 16269649
+#    800.00ns INFO     80 / 100
+# en     : 1
+# we     : 1100
+# adr    : 4
+# dat in : 235387203
+# 
+# actual dat out: 16269649
+# expect dat out: 16269649
+#    810.00ns INFO     81 / 100
+# en     : 1
+# we     : 0000
+# adr    : 1
+# dat in : 259193025
+# 
+# actual dat out: 264241152
+# expect dat out: 264241152
+#    820.00ns INFO     82 / 100
+# en     : 1
+# we     : 0010
+# adr    : 0
+# dat in : 6355446
+# 
+# actual dat out: 39997018
+# expect dat out: 39997018
+#    830.00ns INFO     83 / 100
+# en     : 0
+# we     : 1010
+# adr    : 4
+# dat in : 80180088
+# 
+# actual dat out: 16280913
+# expect dat out: 16280913
+#    840.00ns INFO     84 / 100
+# en     : 1
+# we     : 0000
+# adr    : 1
+# dat in : 124540165
+# 
+# actual dat out: 16280913
+# expect dat out: 16280913
+#    850.00ns INFO     85 / 100
+# en     : 0
+# we     : 1011
+# adr    : 2
+# dat in : 268005609
+# 
+# actual dat out: 188906663
+# expect dat out: 188906663
+#    860.00ns INFO     86 / 100
+# en     : 1
+# we     : 0111
+# adr    : 3
+# dat in : 75457816
+# 
+# actual dat out: 188906663
+# expect dat out: 188906663
+#    870.00ns INFO     87 / 100
+# en     : 1
+# we     : 1110
+# adr    : 4
+# dat in : 67410134
+# 
+# actual dat out: 115440274
+# expect dat out: 115440274
+#    880.00ns INFO     88 / 100
+# en     : 1
+# we     : 1110
+# adr    : 0
+# dat in : 58032185
+# 
+# actual dat out: 188906663
+# expect dat out: 188906663
+#    890.00ns INFO     89 / 100
+# en     : 1
+# we     : 1111
+# adr    : 3
+# dat in : 91114809
+# 
+# actual dat out: 27272832
+# expect dat out: 27272832
+#    900.00ns INFO     90 / 100
+# en     : 0
+# we     : 0010
+# adr    : 2
+# dat in : 199059545
+# 
+# actual dat out: 235384145
+# expect dat out: 235384145
+#    910.00ns INFO     91 / 100
+# en     : 0
+# we     : 1110
+# adr    : 3
+# dat in : 64852972
+# 
+# actual dat out: 235384145
+# expect dat out: 235384145
+#    920.00ns INFO     92 / 100
+# en     : 1
+# we     : 1011
+# adr    : 3
+# dat in : 245582529
+# 
+# actual dat out: 235384145
+# expect dat out: 235384145
+#    930.00ns INFO     93 / 100
+# en     : 0
+# we     : 0110
+# adr    : 1
+# dat in : 264049883
+# 
+# actual dat out: 115440018
+# expect dat out: 115440018
+#    940.00ns INFO     94 / 100
+# en     : 0
+# we     : 0001
+# adr    : 4
+# dat in : 1745031
+# 
+# actual dat out: 115440018
+# expect dat out: 115440018
+#    950.00ns INFO     95 / 100
+# en     : 1
+# we     : 1111
+# adr    : 6
+# dat in : 137491197
+# 
+# actual dat out: 115440018
+# expect dat out: 115440018
+#    960.00ns INFO     96 / 100
+# en     : 1
+# we     : 1010
+# adr    : 0
+# dat in : 136285458
+# 
+# actual dat out: 29320472
+# expect dat out: 29320472
+#    970.00ns INFO     97 / 100
+# en     : 1
+# we     : 0110
+# adr    : 5
+# dat in : 211903532
+# 
+# actual dat out: 91114809
+# expect dat out: 91114809
+#    980.00ns INFO     98 / 100
+# en     : 0
+# we     : 0111
+# adr    : 4
+# dat in : 40657436
+# 
+# actual dat out: 116374545
+# expect dat out: 116374545
+#    990.00ns INFO     99 / 100
+# en     : 0
+# we     : 1110
+# adr    : 2
+# dat in : 59794214
+# 
+# actual dat out: 116374545
+# expect dat out: 116374545
+#   1001.00ns INFO     test1 passed
+#   1001.00ns INFO     **************************************************************************************
+#                      ** TEST                          STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+#                      **************************************************************************************
+#                      ** test_ram_sp_structured.test1   PASS        1001.00           0.19       5314.57  **
+#                      **************************************************************************************
+#                      ** TESTS=1 PASS=1 FAIL=0 SKIP=0               1001.00           0.26       3803.64  **
+#                      **************************************************************************************
+#                      
+# Simulation halt requested by foreign interface.
+# End time: 14:11:54 on May 20,2022, Elapsed time: 0:00:01
+# Errors: 0, Warnings: 1

@@ -18,7 +18,7 @@
 
 library ieee;
 use ieee.std_logic_1164.all;
-use ieee.std_logic_textio.all; 
+--use ieee.std_logic_textio.all; 
 use std.textio.all;
 
 package mem_utils_pkg is
@@ -35,7 +35,7 @@ package mem_utils_pkg is
    -- --------------------------------------------------------------------------------------------
    -- Initialize a RAM or ROM from a hex file
    -- --------------------------------------------------------------------------------------------
-   function init_mem_hex(
+   impure function init_mem_hex(
       filename  : string;  
       MEM_DEPTH : integer;
       MEM_WIDTH : integer)
@@ -44,7 +44,7 @@ package mem_utils_pkg is
    -- --------------------------------------------------------------------------------------------
    -- Initialize a RAM or ROM from a binary file
    -- --------------------------------------------------------------------------------------------  
-   function init_mem_bin(
+   impure function init_mem_bin(
       filename  : in string;
       MEM_DEPTH : in integer;
       MEM_WIDTH : in integer)
@@ -53,7 +53,7 @@ package mem_utils_pkg is
    -- --------------------------------------------------------------------------------------------
    -- General RAM/ROM initialization function
    -- --------------------------------------------------------------------------------------------
-   function init_mem(
+   impure function init_mem(
       INIT_TYPE : in string;
       filename  : in string;
       MEM_INIT  : in t_vector_array;
@@ -68,14 +68,14 @@ package body mem_utils_pkg is
    -- Memory Initialization Functions
    -- ============================================================================================
    
-   function init_mem_hex(
+   impure function init_mem_hex(
       filename  : string;
       MEM_DEPTH : integer;
       MEM_WIDTH : integer)
       return t_vector_array
    is 
       --file mem_file : text open read_mode is filename;
-      file mem_file : text is in filename;
+      file mem_file : text is filename;
       variable mem_file_line  : line;
       variable ram_content    : t_vector_array(MEM_DEPTH-1 downto 0)(MEM_WIDTH-1 downto 0);
       variable early_eof_flag : boolean := FALSE; 
@@ -95,13 +95,13 @@ package body mem_utils_pkg is
       return ram_content;
    end function;
 
-   function init_mem_bin(
+   impure function init_mem_bin(
       filename   : in string;
       MEM_DEPTH  : in integer;
       MEM_WIDTH  : in integer)  
       return t_vector_array
    is 
-      file mem_file : text is in filename;
+      file mem_file : text is filename;
       variable mem_file_line  : line;
       variable ram_content    : t_vector_array(MEM_DEPTH-1 downto 0)(MEM_WIDTH-1 downto 0);
       variable early_eof_flag : boolean := FALSE; 
@@ -121,7 +121,7 @@ package body mem_utils_pkg is
       return ram_content;
    end function;
 
-   function init_mem(
+   impure function init_mem(
       INIT_TYPE  : in string;
       filename   : in string;
       MEM_INIT   : in t_vector_array; -- (MEM_DEPTH-1 downto 0)(MEM_WIDTH-1 downto 0); TODO: fix this vivado error  

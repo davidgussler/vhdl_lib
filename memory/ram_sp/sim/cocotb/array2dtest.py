@@ -18,7 +18,7 @@ NUM_SAMPLES = 10
 G_DAT_N_COL = 4
 G_DAT_COL_W = 4
 G_DEPTH = 8
-G_RD_LATENCY = 2
+G_RD_LATENCY = 0
 
 def int_to_blist(input, n_bits):
     return list(LogicArray(input,Range(n_bits-1,'downto',0)).binstr)
@@ -32,13 +32,12 @@ class RamTester:
         self._ram = [0 for i in range(G_DEPTH)]
         self._nxt_ram = [0 for i in range(G_DEPTH)]
 
-
         if (G_RD_LATENCY > 0):
             self._dout = [0 for i in range(G_RD_LATENCY)]
             self._nxt_dout = [0 for i in range(G_RD_LATENCY)]
         elif(G_RD_LATENCY == 0):
-            self._dout = 0
-            self._nxt_dout = 0
+            self._dout = [0]
+            self._nxt_dout = [0]
         else:
             raise Exception("ERROR: G_RD_LATENCY must be >= 0")
 
@@ -49,7 +48,7 @@ class RamTester:
 
         # Comb Logic Model
         if (G_RD_LATENCY == 0):
-            self._dout = self._ram[adr]
+            self._dout[0] = self._ram[adr]
 
         # Nxt State Logic Model
         if (en == 1): 
@@ -68,10 +67,7 @@ class RamTester:
                     self._nxt_dout[i] = self._dout[i+1]
                 self._nxt_dout[G_RD_LATENCY-1] = self._ram[adr]
 
-        if (G_RD_LATENCY > 0):
-            return self._dout[0]
-        else:
-            return self._dout
+        return self._dout[0]
 
 
 def gen_en(num_samples=NUM_SAMPLES, width=1):

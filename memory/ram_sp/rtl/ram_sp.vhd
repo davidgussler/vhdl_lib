@@ -66,7 +66,8 @@
 --       path. For example: 
 --       "C:\Users\david\projects\fpga\reuse\memory\ram_sp\rtl\memory_init_bin.txt"
 --                        
---    G_MEM_INIT   : t_vector_array(G_DEPTH-1 downto 0)(G_DAT_N_COL*G_DAT_COL_W-1 downto 0) := (others=>(others=>'0'))
+--    G_MEM_INIT   : t_vector_array(G_DEPTH-1 downto 0)(G_DAT_N_COL*G_DAT_COL_W-1 downto 0) 
+--                 := (others=>(others=>'0'))
 --       This generic makes use of VHDL '08 features, so it may not be supported 
 --       by all tools. Please consult your vendor documentation. 
 --       If memory does not need to be initialized then there is no need to set
@@ -84,9 +85,9 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-use ieee.math_real.all; 
 
 use work.mem_utils_pkg.all;
+use work.gen_utils_pkg.all;
 
 entity ram_sp is 
    generic(
@@ -97,12 +98,14 @@ entity ram_sp is
       G_MEM_STYLE  : string  := "auto";
       G_INIT_TYPE  : string  := "mem_init"; 
       G_FILE_NAME  : string  := "mem_init.txt"; -- provide absolute path!
-      G_MEM_INIT   : t_vector_array(G_DEPTH-1 downto 0)(G_DAT_N_COL*G_DAT_COL_W-1 downto 0) := (others=>(others=>'0'))
+      G_MEM_INIT   : t_vector_array(G_DEPTH-1 downto 0)(G_DAT_N_COL*G_DAT_COL_W-1 downto 0) := 
+         (others=>(others=>'0'));
+      G_EN_ASSERT  : boolean := TRUE
    );
    port(
       i_en  : in std_logic;
       i_we  : in std_logic_vector(G_DAT_N_COL-1 downto 0);
-      i_adr : in std_logic_vector(ceil(log2(G_DEPTH))-1 downto 0);
+      i_adr : in std_logic_vector(ceil_log2(G_DEPTH)-1 downto 0);
       i_dat : in std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
       o_dat : out std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
 
@@ -115,14 +118,16 @@ architecture rtl of ram_sp is
    constant C_DAT_W : integer := G_DAT_N_COL * G_DAT_COL_W;
 
    -- Types 
-   type t_data_out_pipe is array (G_RD_LATENCY-1 downto 0) of std_logic_vector(C_DAT_W-1 downto 0); 
+   type t_data_out_pipe is array (G_RD_LATENCY-1 downto 0) of 
+      std_logic_vector(C_DAT_W-1 downto 0); 
 
    -- Wires
    signal w_dat : std_logic_vector(C_DAT_W-1 downto 0); 
 
    -- Registers
    signal r_dat : t_data_out_pipe := (others=>(others=>'0')); 
-   signal r_ram : t_vector_array(G_DEPTH-1 downto 0)(C_DAT_W-1 downto 0) := init_mem(G_INIT_TYPE, G_FILE_NAME, G_MEM_INIT, G_DEPTH, C_DAT_W);
+   signal r_ram : t_vector_array(G_DEPTH-1 downto 0)(C_DAT_W-1 downto 0) := 
+      init_mem(G_INIT_TYPE, G_FILE_NAME, G_MEM_INIT, G_DEPTH, C_DAT_W);
 
    -- --------------------------------------------------------------------------------------------
    -- Synthesis Attributes
@@ -132,15 +137,9 @@ architecture rtl of ram_sp is
    attribute ram_style of r_ram : signal is G_MEM_STYLE;
 
 begin
-   -- Assertions
-   assert not (G_RD_LATENCY = 0 and (G_MEM_STYLE="block" or G_MEM_STYLE="ultra")) 
-      report "Not able to instantiate the requested device specific memory primitive. G_RD_LATENCY must be at least 1." 
-      severity warning; 
-   assert (not (to_integer(unsigned(i_adr)) > G_DEPTH))
-      report "Tried to access an address that doesn't exist (this could happen if G_DEPTH is not a power of 2 and an address larger than G_DEPTH was used)."
-      severity warning; 
-
+   -- --------------------------------------------------------------------------------------------
    -- Assignments
+   -- --------------------------------------------------------------------------------------------
    o_dat <= w_dat; 
 
    -- --------------------------------------------------------------------------------------------
@@ -152,7 +151,8 @@ begin
          if (i_en = '1') then 
             for i in 0 to G_DAT_N_COL-1 loop
                if (i_we(i) = '1') then 
-                  r_ram(to_integer(unsigned(i_adr)))(i*G_DAT_COL_W+G_DAT_COL_W-1 downto i*G_DAT_COL_W) <= 
+                  r_ram(to_integer(unsigned(i_adr)))
+                     (i*G_DAT_COL_W+G_DAT_COL_W-1 downto i*G_DAT_COL_W) <= 
                      i_dat(i*G_DAT_COL_W+G_DAT_COL_W-1 downto i*G_DAT_COL_W); 
                end if;
             end loop;
@@ -183,7 +183,7 @@ begin
    end generate;
 
    -- --------------------------------------------------------------------------------------------
-   -- Output Pipeline Registers
+   -- Synchronous Reads & Output Pipeline Registers
    -- --------------------------------------------------------------------------------------------
    gen_sync_read_pipes : if (G_RD_LATENCY > 1) generate 
       proc_sync_read: process (i_clk)
@@ -199,5 +199,22 @@ begin
       end process; 
       w_dat <= r_dat(G_RD_LATENCY-1); 
    end generate;
+
+
+   -- --------------------------------------------------------------------------------------------
+   -- Assertions 
+   -- --------------------------------------------------------------------------------------------
+   gen_assertions : if (G_EN_ASSERT = TRUE) generate
+      -- pragma translate_off 
+      assert not (G_RD_LATENCY = 0 and (G_MEM_STYLE="block" or G_MEM_STYLE="ultra")) 
+         report "Not able to instantiate the requested device specific memory primitive." &
+            " G_RD_LATENCY must be at least 1." 
+         severity warning; 
+      assert (not (to_integer(unsigned(i_adr)) > G_DEPTH))
+         report "Address is out of range (this could happen if G_DEPTH is not a power of 2" &
+            " and an address larger than G_DEPTH was used)."
+         severity warning; 
+      -- pragma translate_on 
+   end generate;    
 
 end rtl;

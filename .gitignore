@@ -1,1 +1,6 @@
 prj/
+__pycache__/
+sim_build/
+.Xil
+vivado.*
+.pytest_cache/

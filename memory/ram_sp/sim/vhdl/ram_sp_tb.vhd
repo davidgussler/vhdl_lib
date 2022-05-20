@@ -21,6 +21,7 @@ use ieee.numeric_std.all;
 use std.textio.all;
 
 use work.mem_utils_pkg.all;
+use work.gen_utils_pkg.all;
 
 entity ram_sp_tb is
 end entity ram_sp_tb;

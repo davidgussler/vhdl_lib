@@ -20,14 +20,21 @@ from cocotb.types import Logic
 from cocotb.types import Range
 from random import getrandbits
 import logging
+import copy
 
 
-NUM_SAMPLES = 1000
+NUM_SAMPLES = 100
 G_DAT_N_COL = int(cocotb.top.G_DAT_N_COL)
 G_DAT_COL_W = int(cocotb.top.G_DAT_COL_W)
 G_DEPTH = int(cocotb.top.G_DEPTH)
 G_RD_LATENCY = int(cocotb.top.G_RD_LATENCY)
 
+
+def int_to_blist(input, n_bits):
+    return list(LogicArray(input,Range(n_bits-1,'downto',0)).binstr)
+
+def blist_to_int(input):
+    return LogicArray(''.join(input)).integer
 
 
 # Create this TB object in every test so that all the required TB functions can be accessed
@@ -97,15 +104,15 @@ class RamTester:
     def __init__(self, ram_entity: SimHandleBase):
         self.dut = ram_entity
 
-        self._ram = [list(LogicArray(0, Range(G_DAT_COL_W*G_DAT_N_COL-1, 'downto', 0)).binstr) for i in range(G_DEPTH)]
-        self._nxt_ram = [list(LogicArray(0, Range(G_DAT_COL_W*G_DAT_N_COL-1, 'downto', 0)).binstr) for i in range(G_DEPTH)]
-        
+        self._ram = [0 for i in range(G_DEPTH)]
+        self._nxt_ram = [0 for i in range(G_DEPTH)]
+
         if (G_RD_LATENCY > 0):
-            self._dout = [list(LogicArray(0, Range(G_DAT_COL_W*G_DAT_N_COL-1, 'downto', 0)).binstr) for i in range(G_RD_LATENCY)]
-            self._nxt_dout = [list(LogicArray(0, Range(G_DAT_COL_W*G_DAT_N_COL-1, 'downto', 0)).binstr) for i in range(G_RD_LATENCY)]
+            self._dout = [0 for i in range(G_RD_LATENCY)]
+            self._nxt_dout = [0 for i in range(G_RD_LATENCY)]
         elif(G_RD_LATENCY == 0):
-            self._dout = list(LogicArray(0, Range(G_DAT_COL_W*G_DAT_N_COL-1, 'downto', 0)).binstr)
-            self._nxt_dout = list(LogicArray(0, Range(G_DAT_COL_W*G_DAT_N_COL-1, 'downto', 0)).binstr)
+            self._dout = [0]
+            self._nxt_dout = [0]
         else:
             raise Exception("ERROR: G_RD_LATENCY must be >= 0")
 
@@ -142,63 +149,56 @@ class RamTester:
         self._checker = None
 
     def model(self, en, we, adr, dat_in) -> LogicArray:
-
         # Flip Flop Model
-        for p in range(G_DEPTH):
-            for g in range(G_DAT_COL_W*G_DAT_N_COL):
-                self._ram[p][g] = self._nxt_ram[p][g]
-        for w in range(G_RD_LATENCY):
-            for h in range (G_DAT_COL_W*G_DAT_N_COL):
-                self._dout[w][h] = self._nxt_dout[w][h]
+        self._ram = copy.copy(self._nxt_ram)
+        self._dout = copy.copy(self._nxt_dout)
 
         # Comb Logic Model
         if (G_RD_LATENCY == 0):
-            self._dout = self._ram[adr][:]
+            self._dout[0] = self._ram[adr]
 
         # Nxt State Logic Model
-        if (en[0] == '1'): 
+        if (en == 1): 
+            nxt_ram_blist = int_to_blist(self._nxt_ram[adr], G_DAT_COL_W*G_DAT_N_COL)
+            dat_in_blist = int_to_blist(dat_in, G_DAT_COL_W*G_DAT_N_COL)
+
+            we_blist = int_to_blist(we,G_DAT_N_COL)
             for j in range(G_DAT_N_COL):
-                if (we[j] == '1'):
-                    for q in range(j*G_DAT_COL_W, j*G_DAT_COL_W+G_DAT_COL_W):
-                        self._nxt_ram[adr][q] = dat_in[q]
+                if (we_blist[j] == '1'):
+                    nxt_ram_blist[j*G_DAT_COL_W : j*G_DAT_COL_W+G_DAT_COL_W] = \
+                            dat_in_blist[j*G_DAT_COL_W : j*G_DAT_COL_W+G_DAT_COL_W]
+            
+            
+            self._nxt_ram[adr] = blist_to_int(nxt_ram_blist)
+            
             if (G_RD_LATENCY > 0):
                 for i in range(G_RD_LATENCY-1): 
-                    for h in range (G_DAT_COL_W*G_DAT_N_COL):
-                        self._nxt_dout[i][h] = self._dout[i+1][h]
-                for h in range (G_DAT_COL_W*G_DAT_N_COL):
-                    self._nxt_dout[G_RD_LATENCY-1][h] = self._ram[adr][h]
-    
-        if (G_RD_LATENCY > 0):
-            return self._dout[0]
-        else:
-            return self._dout
+                    self._nxt_dout[i] = self._dout[i+1]
+                self._nxt_dout[G_RD_LATENCY-1] = self._ram[adr]
+
+        return self._dout[0]
 
     async def _check(self) -> None:
         while True:
             # run the queue get methods on the dictionary values of the queues 
             # get the new value immediatly after it has been added 
             actual_output = await self.output_mon.data_queue.get()
-            slv_actual_output = LogicArray(actual_output["DO"])
+            actual_output = actual_output["DO"].integer
             module_inputs = await self.input_mon.data_queue.get()
-            #print(LogicArray(module_inputs["AD"]))
-            slv_expected_output = self.model(
-                en=list(LogicArray(module_inputs["EN"]).binstr), 
-                we=list(LogicArray(module_inputs["WE"], Range(G_DAT_N_COL-1, 'downto', 0)).binstr), 
-                adr=LogicArray(module_inputs["AD"]).integer,
-                dat_in=list(LogicArray(module_inputs["DI"], Range(G_DAT_COL_W*G_DAT_N_COL-1, 'downto', 0)).binstr))
+            expected_output = self.model(
+                en=module_inputs["EN"].integer, 
+                we=module_inputs["WE"].integer, 
+                adr=module_inputs["AD"].integer,
+                dat_in=module_inputs["DI"].integer)
 
-            assert slv_actual_output.binstr == "".join(slv_expected_output)
+            assert expected_output == actual_output
             print("en     :",module_inputs["EN"])
             print("we     :",module_inputs["WE"])
-            print("adr    :",module_inputs["AD"])
-            print("dat in :",module_inputs["DI"])
+            print("adr    :",module_inputs["AD"].integer)
+            print("dat in :",module_inputs["DI"].integer)
             print()
-            print("actual dat out:",slv_actual_output.binstr)
-            print("expect dat out:","".join(slv_expected_output))
-            # print()
-            self.dut.tb_blip.value = 1
-            #await Timer(1, units="ns")
-            self.dut.tb_blip.value = 0
+            print("actual dat out:",actual_output)
+            print("expect dat out:",expected_output)
 
 
 @cocotb.test()
@@ -258,7 +258,7 @@ def gen_en(num_samples=NUM_SAMPLES, width=1):
 
 def gen_we(num_samples=NUM_SAMPLES, width=G_DAT_N_COL):
     for _ in range(num_samples):
-        yield getrandbits(width) # LogicArray("1111") #
+        yield  getrandbits(width) # LogicArray("1111") #
 
 def gen_adr(num_samples=NUM_SAMPLES, width=math.ceil(math.log2(G_DEPTH))):
     for _ in range(num_samples):
