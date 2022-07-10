@@ -1,0 +1,105 @@
+$date
+  Tue Jul  5 20:47:20 2022
+$end
+$version
+  GHDL v0
+$end
+$timescale
+  1 fs
+$end
+$scope module standard $end
+$upscope $end
+$scope module textio $end
+$upscope $end
+$scope module std_logic_1164 $end
+$upscope $end
+$scope module numeric_std $end
+$upscope $end
+$scope module math_real $end
+$upscope $end
+$scope module fifo_sync $end
+$var reg 1 ! i_wr $end
+$var reg 32 " i_dat[31:0] $end
+$var reg 1 # o_almost_full $end
+$var reg 1 $ o_full $end
+$var reg 1 % i_rd $end
+$var reg 32 & o_dat[31:0] $end
+$var reg 1 ' o_almost_empty $end
+$var reg 1 ( o_empty $end
+$var reg 1 ) i_clk $end
+$var reg 1 * w_full $end
+$var reg 1 + w_empty $end
+$var reg 12 , r_fifo_cnt[11:0] $end
+$var reg 11 - r_rd_ptr[10:0] $end
+$var reg 11 . r_wr_ptr[10:0] $end
+$comment r_fifo is not handled $end
+$upscope $end
+$enddefinitions $end
+#0
+1!
+b10001010110011001110101001111111 "
+0#
+0$
+0%
+bUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU &
+1'
+1(
+1)
+0*
+1+
+b000000000000 ,
+b00000000000 -
+b00000000000 .
+#5000000
+0)
+#10000000
+b11100111000111010100001000000001 "
+1%
+0(
+1)
+0+
+b000000000001 ,
+b00000000001 .
+#15000000
+0)
+#20000000
+b11001111110011011100101101100111 "
+b10001010110011001110101001111111 &
+1)
+b00000000001 -
+b00000000010 .
+#25000000
+0)
+#30000000
+b11111100111011011001000000001010 "
+0%
+b11100111000111010100001000000001 &
+1)
+b00000000010 -
+b00000000011 .
+#35000000
+0)
+#40000000
+b10110000011010010000100000010001 "
+1)
+b000000000010 ,
+b00000000100 .
+#45000000
+0)
+#50000000
+0'
+1)
+b000000000011 ,
+b00000000101 .
+#55000000
+0)
+#60000000
+1)
+b000000000100 ,
+b00000000110 .
+#65000000
+0)
+#70000000
+1)
+b000000000101 ,
+b00000000111 .

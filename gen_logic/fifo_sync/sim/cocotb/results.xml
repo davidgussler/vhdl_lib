@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="123456789" />
+    <testcase name="test1" classname="test_fifo_sync" file="/home/david/prj_wsl/fpga_dev/reuse/gen_logic/fifo_sync/sim/cocotb/test_fifo_sync.py" lineno="222" time="0.04516744613647461" sim_time_ns="71.0" ratio_time="1571.9285917886891" />
+  </testsuite>
+</testsuites>
