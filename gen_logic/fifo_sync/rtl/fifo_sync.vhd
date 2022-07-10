@@ -25,7 +25,7 @@ use ieee.math_real.all;
 entity fifo_sync is
    generic (
       G_WIDTH        : positive := 32; 
-      G_SIZE         : positive := 128; 
+      G_DEPTH_LOG2   : positive := 11; 
       G_ALMOST_FULL  : natural  := 2; 
       G_ALMOST_EMPTY : natural  := 2;
       G_MEM_STYLE    : string  := ""
@@ -43,26 +43,27 @@ entity fifo_sync is
       o_almost_empty : out std_logic; 
       o_empty        : out std_logic; 
 
-      i_rst   : in std_logic;
       i_clk   : in std_logic
    );
 end entity;
 
 architecture rtl of fifo_sync is
-   -- Types 
-   type t_fifo  is array (G_SIZE-1 downto 0) of std_logic_vector(G_WIDTH-1 downto 0); 
-
+   
    -- Constants 
-   constant C_ALMOST_FULL_LVL : integer := G_SIZE - G_ALMOST_FULL; 
+   constant C_DEPTH : integer := 2 ** G_DEPTH_LOG2; 
+   constant C_ALMOST_FULL_LVL : integer := C_DEPTH - G_ALMOST_FULL; 
+   
+   -- Types 
+   type t_fifo  is array (C_DEPTH-1 downto 0) of std_logic_vector(G_WIDTH-1 downto 0); 
 
    -- Wires 
    signal w_full  : std_logic; 
    signal w_empty : std_logic; 
 
    -- Registers 
-   signal r_fifo_cnt : unsigned(G_WIDTH-1 downto 0) := (others=>'0'); 
-   signal r_rd_ptr   : unsigned(G_WIDTH-1 downto 0) := (others=>'0'); 
-   signal r_wr_ptr   : unsigned(G_WIDTH-1 downto 0) := (others=>'0');   
+   signal r_fifo_cnt : unsigned(G_DEPTH_LOG2 downto 0) := (others=>'0'); -- tracks how "full" the fifo is
+   signal r_rd_ptr   : unsigned(G_DEPTH_LOG2-1 downto 0) := (others=>'0'); 
+   signal r_wr_ptr   : unsigned(G_DEPTH_LOG2-1 downto 0) := (others=>'0');   
    signal r_fifo     : t_fifo; 
 
    -- --------------------------------------------------------------------------------------------
@@ -74,13 +75,14 @@ architecture rtl of fifo_sync is
 
 begin
 
-   -- Assignments
+   -- Comb Assignments
    o_full <= w_full;
    o_empty <= w_empty; 
-   o_almost_full  <= '1' when r_fifo_cnt > C_ALMOST_FULL_LVL else '0';
-   o_almost_empty <= '1' when r_fifo_cnt < G_ALMOST_EMPTY else '0';
-   w_full  <= '1' when r_fifo_cnt = G_SIZE else '0'; 
-   w_empty <= '1' when r_fifo_cnt = 0      else '0';
+   o_almost_full  <= '1' when r_fifo_cnt >= C_ALMOST_FULL_LVL else '0';
+   o_almost_empty <= '1' when r_fifo_cnt <= G_ALMOST_EMPTY else '0';
+   
+   w_full  <= '1' when r_fifo_cnt = C_DEPTH else '0'; 
+   w_empty <= '1' when r_fifo_cnt = 0       else '0';
 
    prc_fifo_sync : process (i_clk)
    begin

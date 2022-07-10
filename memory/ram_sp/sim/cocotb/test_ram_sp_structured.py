@@ -18,12 +18,8 @@ from random import getrandbits
 import logging
 import copy
 
-
-NUM_SAMPLES = int(os.environ.get("NUM_SAMPLES", 3000))
-G_DAT_N_COL = int(cocotb.top.G_DAT_N_COL)
-G_DAT_COL_W = int(cocotb.top.G_DAT_COL_W)
-G_DEPTH = int(cocotb.top.G_DEPTH)
-G_RD_LATENCY = int(cocotb.top.G_RD_LATENCY)
+from cocotb_test.simulator import run
+import pytest
 
 
 def int_to_blist(input, n_bits):
@@ -31,6 +27,23 @@ def int_to_blist(input, n_bits):
 
 def blist_to_int(input):
     return LogicArray(''.join(input)).integer
+
+
+def gen_en(num_samples, width):
+    for _ in range(num_samples):
+        yield getrandbits(width)
+
+def gen_we(num_samples, width):
+    for _ in range(num_samples):
+        yield  getrandbits(width) 
+
+def gen_adr(num_samples, width):
+    for _ in range(num_samples):
+        yield getrandbits(width)
+
+def gen_data_in(num_samples, width):
+    for _ in range(num_samples):
+        yield getrandbits(width)
 
 
 # Create this TB object in every test so that all the required TB functions can be accessed
@@ -45,6 +58,8 @@ class TB(object):
         self.log.setLevel(logging.DEBUG)
 
         cocotb.start_soon(Clock(dut.i_clk, 10, units="ns").start())
+
+
 
 class CycleMonitor:
     """Monitors N signals (organized in a dictionary) every clockcycle"""
@@ -75,8 +90,7 @@ class CycleMonitor:
         self._coro = None 
 
     async def _run(self) -> None:
-        while True:
-            await RisingEdge(self._clk)        
+        while True:    
             await FallingEdge(self._clk) 
             self.data_queue.put_nowait(self._sample()) 
 
@@ -99,6 +113,9 @@ class CycleMonitor:
 class RamTester:
     def __init__(self, ram_entity: SimHandleBase):
         self.dut = ram_entity
+
+        G_RD_LATENCY = self.dut.G_RD_LATENCY.value.integer
+        G_DEPTH = self.dut.G_DEPTH.value.integer
 
         self._ram = [0 for i in range(G_DEPTH)]
         self._nxt_ram = [0 for i in range(G_DEPTH)]
@@ -145,6 +162,12 @@ class RamTester:
         self._checker = None
 
     def model(self, en, we, adr, dat_in) -> LogicArray:
+        """Model of the RAM Module"""
+        
+        G_RD_LATENCY = self.dut.G_RD_LATENCY.value.integer
+        G_DAT_COL_W = self.dut.G_DAT_COL_W.value.integer
+        G_DAT_N_COL = self.dut.G_DAT_N_COL.value.integer
+
         # Flip Flop Model
         self._ram = copy.copy(self._nxt_ram)
         self._dout = copy.copy(self._nxt_dout)
@@ -157,8 +180,8 @@ class RamTester:
         if (en == 1): 
             nxt_ram_blist = int_to_blist(self._nxt_ram[adr], G_DAT_COL_W*G_DAT_N_COL)
             dat_in_blist = int_to_blist(dat_in, G_DAT_COL_W*G_DAT_N_COL)
-
             we_blist = int_to_blist(we,G_DAT_N_COL)
+
             for j in range(G_DAT_N_COL):
                 if (we_blist[j] == '1'):
                     nxt_ram_blist[j*G_DAT_COL_W : j*G_DAT_COL_W+G_DAT_COL_W] = \
@@ -181,27 +204,35 @@ class RamTester:
             actual_output = await self.output_mon.data_queue.get()
             actual_output = actual_output["DO"].integer
             module_inputs = await self.input_mon.data_queue.get()
-            if (module_inputs["AD"].integer < G_DEPTH):
-                expected_output = self.model(
-                    en=module_inputs["EN"].integer, 
-                    we=module_inputs["WE"].integer, 
-                    adr=module_inputs["AD"].integer,
-                    dat_in=module_inputs["DI"].integer)
+            expected_output = self.model(
+                en=module_inputs["EN"].integer, 
+                we=module_inputs["WE"].integer, 
+                adr=module_inputs["AD"].integer,
+                dat_in=module_inputs["DI"].integer)
 
-                assert expected_output == actual_output
+            assert expected_output == actual_output
 
-                self.dut._log.info("en     : " + str(module_inputs["EN"]))
-                self.dut._log.info("we     : " + str(module_inputs["WE"]))
-                self.dut._log.info("adr    : " + str(module_inputs["AD"].integer))
-                self.dut._log.info("dat in : " + str(module_inputs["DI"].integer))
-                self.dut._log.info("actual dat out: " + str(actual_output))
-                self.dut._log.info("expect dat out: " + str(expected_output))
-                self.dut._log.info("")
-            
+            self.dut._log.info("en     : " + str(module_inputs["EN"]))
+            self.dut._log.info("we     : " + str(module_inputs["WE"]))
+            self.dut._log.info("adr    : " + str(module_inputs["AD"].integer))
+            self.dut._log.info("dat in : " + str(module_inputs["DI"].integer))
+            self.dut._log.info("actual dat out: " + str(actual_output))
+            self.dut._log.info("expect dat out: " + str(expected_output))
+            self.dut._log.info("")
+
+
 
 @cocotb.test()
 async def test1(dut):
     """Test RAM output at every cycle."""
+    
+    G_RD_LATENCY = dut.G_RD_LATENCY.value.integer
+    G_DAT_COL_W = dut.G_DAT_COL_W.value.integer
+    G_DAT_N_COL = dut.G_DAT_N_COL.value.integer
+    G_RD_LATENCY = dut.G_RD_LATENCY.value.integer
+    G_DEPTH = dut.G_DEPTH.value.integer
+    NUM_SAMPLES  = int(os.environ.get("NUM_SAMPLES", 3000))
+    
 
     # Initialize the TB class 
     # this just starts the logger and starts the clock 
@@ -219,7 +250,6 @@ async def test1(dut):
     dut.i_dat.value = 0 
 
     # start tester
-    #await RisingEdge(dut.i_clk)
     tester.start()
 
     dut._log.info("TEST STARTING")
@@ -229,9 +259,12 @@ async def test1(dut):
     dut._log.info("G_DEPTH     : " + str(G_DEPTH))
     dut._log.info("G_RD_LATENCY: " + str(G_RD_LATENCY))
     dut._log.info("")
-    
+
     # Apply stimulus
-    for i, (EN, WE, AD, DI) in enumerate(zip(gen_en(), gen_we(), gen_adr(), gen_data_in())):
+    for i, (EN, WE, AD, DI) in enumerate(zip(gen_en(NUM_SAMPLES,1), \
+            gen_we(NUM_SAMPLES,G_DAT_N_COL), gen_adr(NUM_SAMPLES,math.floor(math.log2(G_DEPTH))), \
+            gen_data_in(NUM_SAMPLES,G_DAT_N_COL*G_DAT_COL_W))):
+
         await RisingEdge(dut.i_clk)
         dut.i_en.value = EN
         dut.i_we.value = WE
@@ -241,28 +274,54 @@ async def test1(dut):
         if i % 10 == 0:
             dut._log.info(f"{i} / {NUM_SAMPLES}")
         
-
+    await RisingEdge(dut.i_clk)
+    await RisingEdge(dut.i_clk)
     await RisingEdge(dut.i_clk)
 
 
-# These are generator functions because the use yeild instead of return 
-# Generators are iterators, a kind of iterable you can only iterate over once.
-# Generators do not store all the values in memory, they generate the values on the fly
-# it's handy when you know your function will return a huge set of values that you will 
-# only need to read once.
 
-def gen_en(num_samples=NUM_SAMPLES, width=1):
-    for _ in range(num_samples):
-        yield getrandbits(width)
+# cocotb-test
 
-def gen_we(num_samples=NUM_SAMPLES, width=G_DAT_N_COL):
-    for _ in range(num_samples):
-        yield  getrandbits(width) 
+# tests_dir = os.path.dirname(os.path.realpath(__file__))
+# rtl_dir = os.path.abspath(os.path.join(tests_dir, '..', '..', 'rtl'))
 
-def gen_adr(num_samples=NUM_SAMPLES, width=math.floor(math.log2(G_DEPTH))):
-    for _ in range(num_samples):
-        yield getrandbits(width)
+# @pytest.mark.parametrize(
+#         "G_DAT_N_COL, G_DAT_COL_W, G_DEPTH, G_RD_LATENCY", [(4,8,32,1)])
+# def test_ram_sp(request, G_DAT_N_COL, G_DAT_COL_W, G_DEPTH, G_RD_LATENCY):
+#     module = os.path.splitext(os.path.basename(__file__))[0]
+#     toplevel = "ram_sp"
+    
+#     vhdl_sources = [
+#         os.path.join(tests_dir,"..","..","..","..","gen_logic","gen_utils_pkg.vhd"),
+#         os.path.join(tests_dir,"..","..","..","mem_utils_pkg.vhd"),
+#         os.path.join(rtl_dir, "ram_sp.vhd"),
+#     ]
 
-def gen_data_in(num_samples=NUM_SAMPLES, width=G_DAT_N_COL*G_DAT_COL_W):
-    for _ in range(num_samples):
-        yield getrandbits(width)
+#     parameters = {}  
+
+#     parameters["G_DAT_N_COL"] = G_DAT_N_COL
+#     parameters["G_DAT_COL_W"] = G_DAT_COL_W
+#     parameters["G_DEPTH"] = G_DEPTH
+#     parameters["G_RD_LATENCY"] = G_RD_LATENCY
+
+
+#     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
+
+#     sim_build = os.path.join(tests_dir, "sim_build",
+#         request.node.name.replace('[', '-').replace(']', ''))
+    
+#     run(
+#         python_search=[tests_dir],
+#         toplevel_lang="vhdl",
+#         vhdl_sources=vhdl_sources,
+#         toplevel=toplevel,
+#         module=module,
+#         parameters=parameters,
+#         extra_env=extra_env,
+#         sim_build=sim_build,
+#         seed=123456789,
+#         compile_args=["--std=08"],
+#     )
+#
+# SIM=ghdl NUM_SAMPLES=20 pytest -o log_cli=True test_ram_sp_structured.py
+

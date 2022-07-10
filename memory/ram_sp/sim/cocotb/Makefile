@@ -5,14 +5,15 @@
 # Top level language 
 TOPLEVEL_LANG ?= vhdl
 # Simulator choice 
-SIM ?= questa
+SIM ?= ghdl#questa
 
 # Generics 
-export NUM_SAMPLES        ?= 1000
+export NUM_SAMPLES        ?= 5
 export GENERIC_DAT_N_COL  ?= 4
-export GENERIC_DAT_COL_W  ?= 7
-export GENERIC_DEPTH      ?= 9
-export GENERIC_RD_LATENCY ?= 3
+export GENERIC_DAT_COL_W  ?= 8
+export GENERIC_DEPTH      ?= 2
+export GENERIC_RD_LATENCY ?= 1
+
 
 ifeq ($(TOPLEVEL_LANG),vhdl)
    # Set Sources
@@ -38,10 +39,9 @@ ifeq ($(TOPLEVEL_LANG),vhdl)
       EXTRA_ARGS += --ieee=standard
       SIM_ARGS   += --vcd=wave.vcd
    else ifneq ($(filter $(SIM),questa modelsim riviera activehdl),)
+      COMPILE_ARGS += -floatgenerics
       COMPILE_ARGS += -2008
       COMPILE_ARGS += +cover=sbceft
-
-
       SIM_ARGS += -coverage
       #SIM_ARGS += -ucdbfile cov_file
       SIM_ARGS += -testname coverage
