@@ -39,7 +39,8 @@ TARGET_LANG   := VHDL
 
 # ==== Source Files ==== #
 # VHDL source files (*.vhd, *.vhdl); Accepts vhdl 2008 files as well
-SOURCES_VHDL := ../hdl/wbregs.vhd  \
+SOURCES_VHDL := ../../utils/gen_utils_pkg.vhd \
+                ../hdl/wbregs.vhd  \
                 ../hdl/wbregs_example.vhd
 
 # Verilog and SystemVerilog files (*.v, *.vh, *.sv, *.svh)

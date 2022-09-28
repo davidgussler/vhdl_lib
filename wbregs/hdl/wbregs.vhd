@@ -100,7 +100,7 @@ begin
     -- Simple Comb Logic -------------------------------------------------------
     -- -------------------------------------------------------------------------
     idx <= to_integer(unsigned(i_wbs_adr(G_NUM_ADR_BITS-1 downto G_DAT_WIDTH_LOG2-3)));
-    misaligned_err <= '1' when G_DAT_WIDTH_LOG2 > 3 and unsigned(i_wbs_adr(G_DAT_WIDTH_LOG2-4 downto 0)) > unsigned('0') else '0';
+    misaligned_err <= '1' when G_DAT_WIDTH_LOG2 > 3 and unsigned(i_wbs_adr(G_DAT_WIDTH_LOG2-4 downto 0)) > unsigned(0) else '0';
     non_exist_err <= '1' when idx > G_NUM_REGS;
 
 
@@ -154,9 +154,9 @@ begin
 
                             for sel in i_wbs_sel'range loop
                                 if i_wbs_sel(sel) = '1' then
-                                    regs_out_r(sel*8+7 downto sel*8) <= i_wbs_dat(sel*8+7 downto sel*8);
+                                    regs_out_r(idx)(sel*8+7 downto sel*8) <= i_wbs_dat(sel*8+7 downto sel*8);
                                 else 
-                                    regs_out_r(sel*8+7 downto sel*8) <= (others=>'0');
+                                    regs_out_r(idx)(sel*8+7 downto sel*8) <= (others=>'0');
                                 end if;
                             end loop;
                         else
