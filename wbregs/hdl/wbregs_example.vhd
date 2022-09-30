@@ -13,7 +13,7 @@ entity wbregs_example is
         -- Wishbone Slave Interface
         i_wbs_cyc : in  std_logic;
         i_wbs_stb : in  std_logic;
-        i_wbs_adr : in  std_logic_vector(6 downto 0);
+        i_wbs_adr : in  std_logic_vector(7 downto 0);
         i_wbs_wen : in  std_logic;
         i_wbs_sel : in  std_logic_vector(3 downto 0);
         i_wbs_dat : in  std_logic_vector(31 downto 0);
@@ -95,6 +95,18 @@ architecture rtl of wbregs_example is
             REG5_RW => X"0000_0010"
         );
 
+    constant C_REG_USED_BITS  :
+        slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_LOG2)-1 downto 0) :=
+        (
+            REG0_RO => X"0000_0001",
+            REG1_RO => X"FFFF_0000",
+            REG2_RO => X"FFFF_FFFF",
+            REG3_RW => X"0000_0100",
+            REG4_RW => X"0000_FF00",
+            REG5_RW => X"FFFF_FFFF"
+        );
+
+
     constant C_EN_ASSERT      : boolean := TRUE;
 
     signal regs_in  : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_LOG2)-1 downto 0);
@@ -106,7 +118,7 @@ architecture rtl of wbregs_example is
     signal r1_v0 : std_logic_vector(15 downto 0);
     signal r2_v0 : std_logic_vector(31 downto 0);
     signal r3_b0 : std_logic;
-    signal r4_v0 : std_logic_vector(8 downto 0);
+    signal r4_v0 : std_logic_vector(7 downto 0);
     signal r5_v0 : std_logic_vector(31 downto 0);
 
 
@@ -114,7 +126,7 @@ begin
 
     -- Instantiate Register Interface ------------------------------------------
     -- -------------------------------------------------------------------------
-    register_interface : entity work.wb_regs(rtl)
+    register_interface : entity work.wbregs(rtl)
     generic map (
         G_DAT_WIDTH_LOG2 => C_DAT_WIDTH_LOG2,
         G_NUM_REGS       => C_NUM_REGS,
@@ -122,6 +134,7 @@ begin
         G_REG_ADR        => C_REG_ADR,
         G_REG_TYPE       => C_REG_TYPE,
         G_REG_RST_VAL    => C_REG_RST_VAL,
+        G_REG_USED_BITS  => C_REG_USED_BITS,
         G_EN_ASSERT      => C_EN_ASSERT
     )
     port map (

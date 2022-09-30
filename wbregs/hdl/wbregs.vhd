@@ -31,14 +31,18 @@
 -- o_wbs_dat(reserved_bit) will always read back a 0
 --
 -- If a RW bit is reserved, i_wbs_dat(reserved_bit) will not do anything and 
--- o_regs(reserved_bit) will always read back a 0. We can optomize out reserved 
+-- o_regs(reserved_bit) will always read back a 0. We can optomize out reserved
 -- bits from o_regs (tie output directly to 0 rather than registering the zero
 -- before outputting)
 --
 -- REG_RESET_VAL will do nothing to RO_REG, only RW_REGS need to be reset 
 -- (assuming I stop registering the input 2D vector i_regs)
 
+-- TODO: update so that unused bits are optomized out (tied to 0 instead 
+-- of using a register for lower utilization)
+-- Consider adding another cycle in to possibly speed up timing
 
+-- TODO: add assertion checks at the bottom
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -53,6 +57,7 @@ entity wbregs is
         G_REG_ADR        : slv_array_t(G_NUM_REGS-1 downto 0)(G_NUM_ADR_BITS-1 downto 0);
         G_REG_TYPE       : regtype_array_t(G_NUM_REGS-1 downto 0);
         G_REG_RST_VAL    : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
+        G_REG_USED_BITS  : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
         G_EN_ASSERT      : boolean := TRUE
     );
     port(
@@ -84,12 +89,14 @@ end wbregs;
 
 
 architecture rtl of wbregs is 
-    signal regs_in_r : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0) := (others=>(others=>'0'));
-    signal regs_out_r : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0) := (others=>(others=>'0'));
+    -- Registers
+    signal regs_out_r : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
 
+    -- Wires
     signal idx : integer;
     signal misaligned_err : std_logic;
     signal non_exist_err : std_logic;
+    signal sel_mask : std_logic_vector((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
 
 begin
     -- Assign Outputs ----------------------------------------------------------
@@ -97,29 +104,19 @@ begin
     o_wbs_stl <= '0';
     o_regs <= regs_out_r;
 
+
     -- Simple Comb Logic -------------------------------------------------------
     -- -------------------------------------------------------------------------
     idx <= to_integer(unsigned(i_wbs_adr(G_NUM_ADR_BITS-1 downto G_DAT_WIDTH_LOG2-3)));
-    misaligned_err <= '1' when G_DAT_WIDTH_LOG2 > 3 and unsigned(i_wbs_adr(G_DAT_WIDTH_LOG2-4 downto 0)) > unsigned(0) else '0';
+    misaligned_err <= '1' when G_DAT_WIDTH_LOG2 > 3 and to_integer(unsigned(i_wbs_adr(G_DAT_WIDTH_LOG2-4 downto 0))) > 0 else '0';
     non_exist_err <= '1' when idx > G_NUM_REGS;
 
-
-    -- Register Inputs ---------------------------------------------------------
-    -- -------------------------------------------------------------------------
-    -- I dont think I REALLY need to register these
-    -- TODO: Remove this 
-    prc_regs : process (i_clk) begin
-        if (rising_edge(i_clk)) then
-            for reg_idx in 0 to G_NUM_REGS-1 loop
-                if (G_REG_TYPE = RO_REG) then
-                    if (i_rst = '1') then
-                        regs_in_r(reg_idx) <= G_REG_RST_VAL(reg_idx);
-                    else 
-                        regs_in_r(reg_idx) <= i_regs(reg_idx);
-                    end if;
-                end if;
-            end loop;
-        end if;
+    -- Expand the select signal out to a byte mask 
+    process (all)
+    begin
+        for sel_bit in i_wbs_sel'range loop
+            sel_mask(sel_bit*8+7 downto sel_bit*8) <= (others=>i_wbs_sel(sel_bit));
+        end loop;
     end process;
 
 
@@ -135,7 +132,7 @@ begin
                 o_rd_stb <= (others=>'0');
 
                 for reg_idx in 0 to G_NUM_REGS-1 loop
-                    if (G_REG_TYPE = RW_REG) then
+                    if (G_REG_TYPE(reg_idx) = RW_REG) then
                         regs_out_r(reg_idx) <= G_REG_RST_VAL(reg_idx);
                     end if;
                 end loop;
@@ -152,12 +149,8 @@ begin
                             o_wr_stb(idx) <= '1';
                             o_wbs_ack <= '1';
 
-                            for sel in i_wbs_sel'range loop
-                                if i_wbs_sel(sel) = '1' then
-                                    regs_out_r(idx)(sel*8+7 downto sel*8) <= i_wbs_dat(sel*8+7 downto sel*8);
-                                else 
-                                    regs_out_r(idx)(sel*8+7 downto sel*8) <= (others=>'0');
-                                end if;
+                            for i in i_wbs_dat'range loop
+                                regs_out_r(idx)(i) <= i_wbs_dat(i) and sel_mask(i) and G_REG_USED_BITS(idx)(i);
                             end loop;
                         else
                             -- error if attempt to write to a RO_REG
@@ -169,16 +162,12 @@ begin
                         o_rd_stb(idx) <= '1';
                         o_wbs_ack <= '1';
 
-                        for sel in i_wbs_sel'range loop
-                            if i_wbs_sel(sel) then
-                                if (G_REG_TYPE(idx) = RO_REG) then
-                                    o_wbs_dat <= regs_in_r(idx)(sel*8+7 downto sel*8);
-                                else 
-                                    o_wbs_dat <= regs_in_r(idx)(sel*8+7 downto sel*8);
-                                end if; 
+                        for i in o_wbs_dat'range loop
+                            if (G_REG_TYPE(idx) = RO_REG) then
+                                o_wbs_dat(i) <= i_regs(idx)(i) and sel_mask(i) and G_REG_USED_BITS(idx)(i);
                             else 
-                                o_wbs_dat(sel*8+7 downto sel*8) <= (others=>'0');
-                            end if;
+                                o_wbs_dat(i) <= regs_out_r(idx)(i) and sel_mask(i);
+                            end if; 
                         end loop;
                     end if;
                 else 
