@@ -51,7 +51,7 @@ use work.gen_utils_pkg.all;
 
 entity wbregs is 
     generic(
-        G_DAT_WIDTH_LOG2 : positive range 3 to 6 := 5;
+        G_DAT_WIDTH_L2   : positive range 3 to 6 := 5;
         G_NUM_REGS       : positive := 32;
         G_NUM_ADR_BITS   : positive := 7;
         G_REG_ADR        : slv_array_t(G_NUM_REGS-1 downto 0)(G_NUM_ADR_BITS-1 downto 0);
@@ -69,12 +69,12 @@ entity wbregs is
         i_wbs_stb : in  std_logic;
         i_wbs_adr : in  std_logic_vector(G_NUM_ADR_BITS-1 downto 0);
         i_wbs_wen : in  std_logic;
-        i_wbs_sel : in  std_logic_vector((2 ** (G_DAT_WIDTH_LOG2-3))-1 downto 0);
-        i_wbs_dat : in  std_logic_vector((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
+        i_wbs_sel : in  std_logic_vector((2 ** (G_DAT_WIDTH_L2-3))-1 downto 0);
+        i_wbs_dat : in  std_logic_vector((2 ** G_DAT_WIDTH_L2)-1 downto 0);
         o_wbs_stl : out std_logic; 
         o_wbs_ack : out std_logic;
         o_wbs_err : out std_logic;
-        o_wbs_dat : out std_logic_vector((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
+        o_wbs_dat : out std_logic_vector((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
         -- Register Interface
         i_regs : in  slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
@@ -96,7 +96,7 @@ architecture rtl of wbregs is
     signal idx : integer;
     signal misaligned_err : std_logic;
     signal non_exist_err : std_logic;
-    signal sel_mask : std_logic_vector((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
+    signal sel_mask : std_logic_vector((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
 begin
     -- Assign Outputs ----------------------------------------------------------
@@ -107,8 +107,8 @@ begin
 
     -- Simple Comb Logic -------------------------------------------------------
     -- -------------------------------------------------------------------------
-    idx <= to_integer(unsigned(i_wbs_adr(G_NUM_ADR_BITS-1 downto G_DAT_WIDTH_LOG2-3)));
-    misaligned_err <= '1' when G_DAT_WIDTH_LOG2 > 3 and to_integer(unsigned(i_wbs_adr(G_DAT_WIDTH_LOG2-4 downto 0))) > 0 else '0';
+    idx <= to_integer(unsigned(i_wbs_adr(G_NUM_ADR_BITS-1 downto G_DAT_WIDTH_L2-3)));
+    misaligned_err <= '1' when G_DAT_WIDTH_L2 > 3 and to_integer(unsigned(i_wbs_adr(G_DAT_WIDTH_LOG2-4 downto 0))) > 0 else '0';
     non_exist_err <= '1' when idx > G_NUM_REGS;
 
     -- Expand the select signal out to a byte mask 
