@@ -87,7 +87,7 @@ begin
                 r_oready <= '1';
             else 
                 -- Master is sending data, but the slave side is stalled
-                if (m_sending_s_stalled = '1') then
+                if (m_sending_s_stalled) then
                     r_valid <= '1';
                     r_oready <= '0';
                 -- Output is not stalled
@@ -102,7 +102,7 @@ begin
     process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (m_sending_s_stalled = '1') then
+            if (m_sending_s_stalled) then
                 r_idata <= i_data;
             end if;
         end if;
@@ -121,9 +121,9 @@ begin
         process (i_clk)
         begin
             if rising_edge(i_clk) then
-                if (i_rst = '1') then
+                if (i_rst) then
                     o_valid <= '0';
-                elsif (slave_not_stalled = '1') then
+                elsif (slave_not_stalled) then
                     o_valid <= ovalid;
                 end if;
             end if; 
@@ -132,7 +132,7 @@ begin
         process (i_clk)
         begin
             if rising_edge(i_clk) then
-                if (slave_not_stalled = '1') then
+                if (slave_not_stalled) then
                     o_data <= odata;
                 end if;
             end if;

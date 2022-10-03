@@ -24,3 +24,5 @@ reports
 *.ip_user_files
 *.runs
 *.sim
+
+vunit_out

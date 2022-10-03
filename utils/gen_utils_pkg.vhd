@@ -32,6 +32,14 @@ package gen_utils_pkg is
 
     end package;
 
+    function find_max(
+        x : int_array_t)
+        return integer;
+    
+    function find_min(
+        x : int_array_t)
+        return integer;
+
 package body gen_utils_pkg is
 
     -- Ceiling of log2 ---------------------------------------------------------
@@ -47,6 +55,38 @@ package body gen_utils_pkg is
             i := i + 1;
         end loop;
         return i;
+    end function;
+
+    
+    -- Find Max ----------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    function find_max(
+        x : int_array_t)
+        return integer
+    is
+        variable max := x(0);
+    begin
+        for i in int_array_t'range loop
+            if (x(i) > max) then
+                max := x(i);
+            end if;
+        end loop; 
+    end function;
+
+
+    -- Find Min ----------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    function find_max(
+        x : int_array_t)
+        return integer
+    is
+        variable max := x(0);
+    begin
+        for i in int_array_t'range loop
+            if (x(i) > max) then
+                max := x(i);
+            end if;
+        end loop; 
     end function;
    
 end package body;

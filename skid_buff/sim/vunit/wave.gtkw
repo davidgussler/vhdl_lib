@@ -1,0 +1,54 @@
+[*]
+[*] GTKWave Analyzer v3.3.104 (w)1999-2020 BSI
+[*] Mon Oct  3 00:40:55 2022
+[*]
+[dumpfile] "/home/david/SynologyDrive/cloud_docs/prj/fpga_dev/reuse/skid_buff/sim/vunit/vunit_out/test_output/lib.skid_buff_tb.test_0_91c0df545e7fa9fead78ecace06dffb38dfe098a/ghdl/wave.ghw"
+[dumpfile_mtime] "Mon Oct  3 00:32:07 2022"
+[dumpfile_size] 4098
+[savefile] "/home/david/SynologyDrive/cloud_docs/prj/fpga_dev/reuse/skid_buff/sim/vunit/wave.gtkw"
+[timestart] 0
+[size] 3692 2032
+[pos] -3799 -34
+*0.000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] top.
+[treeopen] top.skid_buff_tb.
+[sst_width] 388
+[signals_width] 643
+[sst_expanded] 1
+[sst_vpaned_height] 617
+@28
+top.skid_buff_tb.clk
+top.skid_buff_tb.rst
+@420
+top.skid_buff_tb.start
+top.skid_buff_tb.done
+@200
+-
+@28
+top.skid_buff_tb.i_valid
+top.skid_buff_tb.dut.o_ready
+@22
+#{top.skid_buff_tb.dut.i_data[7:0]} top.skid_buff_tb.dut.i_data[7] top.skid_buff_tb.dut.i_data[6] top.skid_buff_tb.dut.i_data[5] top.skid_buff_tb.dut.i_data[4] top.skid_buff_tb.dut.i_data[3] top.skid_buff_tb.dut.i_data[2] top.skid_buff_tb.dut.i_data[1] top.skid_buff_tb.dut.i_data[0]
+@200
+-
+@28
+top.skid_buff_tb.dut.o_valid
+top.skid_buff_tb.i_ready
+@22
+#{top.skid_buff_tb.dut.o_data[7:0]} top.skid_buff_tb.dut.o_data[7] top.skid_buff_tb.dut.o_data[6] top.skid_buff_tb.dut.o_data[5] top.skid_buff_tb.dut.o_data[4] top.skid_buff_tb.dut.o_data[3] top.skid_buff_tb.dut.o_data[2] top.skid_buff_tb.dut.o_data[1] top.skid_buff_tb.dut.o_data[0]
+@200
+-
+@28
+top.skid_buff_tb.dut.r_valid
+@22
+#{top.skid_buff_tb.dut.r_idata[7:0]} top.skid_buff_tb.dut.r_idata[7] top.skid_buff_tb.dut.r_idata[6] top.skid_buff_tb.dut.r_idata[5] top.skid_buff_tb.dut.r_idata[4] top.skid_buff_tb.dut.r_idata[3] top.skid_buff_tb.dut.r_idata[2] top.skid_buff_tb.dut.r_idata[1] top.skid_buff_tb.dut.r_idata[0]
+@28
+top.skid_buff_tb.dut.m_sending_s_stalled
+top.skid_buff_tb.dut.slave_not_stalled
+@22
+#{top.skid_buff_tb.dut.odata[7:0]} top.skid_buff_tb.dut.odata[7] top.skid_buff_tb.dut.odata[6] top.skid_buff_tb.dut.odata[5] top.skid_buff_tb.dut.odata[4] top.skid_buff_tb.dut.odata[3] top.skid_buff_tb.dut.odata[2] top.skid_buff_tb.dut.odata[1] top.skid_buff_tb.dut.odata[0]
+@28
+top.skid_buff_tb.dut.ovalid
+top.skid_buff_tb.dut.r_oready
+[pattern_trace] 1
+[pattern_trace] 0
