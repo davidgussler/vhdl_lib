@@ -8,7 +8,7 @@
 -- Language : VHDL '08
 -- History  :  Date      | Version | Comments 
 --            --------------------------------
---            07-05-2022 | 1.0     | Initial 
+--            10-01-2022 | 1.0     | Initial 
 -- *********************************************************************************************** 
 -- Description : 
 --    Basic testbench for the skid buffer module
@@ -47,7 +47,7 @@ architecture tb of skid_buff_tb is
 
     -- DUT Generics / Signals
     constant C_WIDTH : positive := 8; 
-    constant C_REG_OUTPUTS : boolean := true; 
+    constant C_REG_OUTPUTS : boolean := false; 
 
 
     signal o_ready : std_logic;
@@ -89,7 +89,6 @@ begin
                 wait until (done and rising_edge(clk));
                 info("Test done");
                 wait for 100 * C_CLK_PERIOD;
-
             end if;
         end loop;
 
@@ -125,32 +124,22 @@ begin
     -- -------------------------------------------------------------------------
     prc_receiver_side : process(all)
     begin
-        if (o_valid and stall) then
+        if (stall) then
             i_ready <= '0';
         else 
             i_ready <= '1';
         end if;
     end process;
 
-    process (clk)
-        variable count : natural := 0;
+    prc_stall : process
     begin
-        if rising_edge(clk) then
-            if (done) then
-                count := count+1;
-                report "hello world";
-            end if;
-
-            if ((count > 2) and (count < 6)) then
-                stall <= '1';
-            else 
-                stall <= '0';
-            end if; 
-
-        end if;
+        stall <= '0';
+        wait until rising_edge(o_valid);
+        stall <= '1';
+        wait for C_CLK_PERIOD*5;
     end process;
 
-
+    
     -- TB Signals --------------------------------------------------------------
     -- -------------------------------------------------------------------------
     clk <= not clk after C_CLK_PERIOD / 2;

@@ -13,7 +13,6 @@ scratch
 xsim.dir
 .Xil
 .gen
-.srcs
 *.dcp
 build
 reports

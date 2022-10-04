@@ -23,7 +23,13 @@
 --    https://zipcpu.com/blog/2019/05/22/skidbuffer.html
 --
 -- Generics
---
+--   G_WIDTH    : positive := 32
+--     Data width 
+--   G_REG_OUTS : boolean := FALSE
+--     Register outputs; With this disabled, only o_ready is registered
+--     With this enabled, o_valid and o_data are also registered (useful for 
+--     pipelining longer paths), but the data will take an extra clockcycle
+--     to reach its destination.
 -- #############################################################################
 
 library ieee;
@@ -68,13 +74,13 @@ architecture rtl of skid_buff is
 begin
     -- Async -------------------------------------------------------------------
     -- -------------------------------------------------------------------------
-    odata <= r_idata when r_valid = '1' else i_data;
+    odata <= r_idata when r_valid else i_data;
     ovalid <= i_valid or r_valid;
     o_ready <= r_oready;
 
-    slave_not_stalled <= '1' when ovalid = '0' or i_ready = '1' else '0';
+    slave_not_stalled <= '1' when ((not ovalid) or i_ready) else '0';
     m_sending_s_stalled <= '1' when 
-        (i_valid = '1' and r_oready = '1') and (ovalid = '1' and i_ready = '0')
+        (i_valid and r_oready) and (ovalid and (not i_ready))
         else '0';
 
     -- Sync --------------------------------------------------------------------
@@ -82,7 +88,7 @@ begin
     process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst = '1') then
+            if (i_rst) then
                 r_valid <= '0';
                 r_oready <= '1';
             else 
@@ -91,7 +97,7 @@ begin
                     r_valid <= '1';
                     r_oready <= '0';
                 -- Output is not stalled
-                elsif (i_ready = '1') then
+                elsif (i_ready) then
                     r_valid <= '0';
                     r_oready <= '1';
                 end if;
