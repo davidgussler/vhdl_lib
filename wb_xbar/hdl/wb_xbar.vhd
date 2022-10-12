@@ -56,6 +56,9 @@ entity wb_xbar is
         G_ROUND_ROBIN : boolean := FALSE
     );
     port (
+        i_clk : std_logic; 
+        i_rst : std_logic; 
+
         i_wbm_cyc : std_logic_vector(G_NS-1 downto 0);
         i_wbm_stb : std_logic_vector(G_NS-1 downto 0);
         i_wbm_adr : slv_array_t     (G_NS-1 downto 0)(G_ADR_W-1 downto 0); 
@@ -90,18 +93,34 @@ architecture rtl of wb_xbar is
 
 begin
 
-    gen_masters : for m in G_NUM_MASTERS'range generate
+    gen_masters : for m in G_NM'range generate
     
-        constant C_ADR_DECODE_HI : integer := G_ADR_W
+        constant C_ADR_DECODE_HI : integer := G_ADR_W;
         constant C_ADR_DECODE_LO : integer := find_max(G_S_ADR_W); 
         subtype C_ADR_DECODE_RANGE is integer range C_ADR_DECODE_HI-1 downto C_ADR_DECODE_LO;
         constant C_ADR_DECODE_W  : integer := C_ADR_DECODE_HI - C_ADR_DECODE_LO;
 
         signal decoder_adr : std_logic_vector(C_ADR_DECODE_W-1 downto 0);
-        signal decoded_s_idx : integer range 0 to G_NS;
+        signal s_idx : integer range 0 to G_NS;
 
     begin 
-        -- Buffer
+
+        -- -- Buffers
+        -- u_skid_buff: entity work.skid_buff(rtl)
+        -- generic map (
+        --     G_WIDTH    => 32,
+        --     G_REG_OUTS => false
+        -- )
+        -- port map (
+        --     i_clk   => i_clk,
+        --     i_rst   => i_rst,
+        --     i_valid => 
+        --     o_ready => 
+        --     i_data  => 
+        --     o_valid => 
+        --     i_ready => 
+        --     o_data  => 
+        -- );
 
         -- Address decoding ----------------------------------------------------
         
@@ -111,31 +130,166 @@ begin
         process (all)
         begin
             -- G_NS means that master m is not addressing a valid slave s
-            decoded_s_idx <= G_NS; 
+            s_idx <= G_NS; 
             for s in G_NS'range loop
-                if (G_S_BASE_ADR(s)(C_ADR_DECODE_RANGE) = decoder_adr)
-                    decoded_s_idx = s;
+                if (G_S_BASE_ADR(s)(C_ADR_DECODE_RANGE) = decoder_adr) then
+                    s_idx <= s;
                 end if;
             end loop;
         end process;
+
+        -- register the index on a valid transaction
+        process (i_clk)
+        begin
+            if rising_edge(i_clk) then
+                if (i_rst) then
+                    r_s_idx <= 0; 
+                else 
+                    if i_wbm_cyc(m) and i_wbm_stb(m) then
+                        r_s_idx <= s_idx; 
+                    end if;
+                end if; 
+            end if;
+        end process;
+
+
+
+
+
+
+
+
+
+
+
+        if (i_wbm_cyc(m) and i_wbm_stb(m) and ) and 
         
-        request(m)(decoded_s_idx) <= '1' when i_wbm_cyc(m) = '1' and i_wbm_stb(m) = '1' else '0';
+
+        -- requests
+        request(m)(r_s_idx) <= r_wbm_cyc(m);
+        request_m <= r_wbm_cyc(m);
         
         -- grants
+        higher_pri_req(0) <= '0'; 
+        higher_pri_req(m+1) <= higher_pri_req(m) or request_m;
+
+        process (all)
+        begin
+            other_master_has_slave <= '0';
+            for m2 in G_NM'range loop
+                if (m /= m2) then
+                    if (grant(m2)(s_idx)) then
+                        other_master_has_slave <= '1';
+                    end if; 
+                end if;
+            end loop;
+        end process;
+
+        grant(m)(s_idx) <= 
+                request_m and ((not higher_pri_req(m) and not other_master_has_slave) or s_idx = G_NS);
         
-        -- grant requests 
-        
+
         -- route responses from slaves back to masters
+        process (all)
+        begin
+            if grant(m)(s_idx) then
+                if (s_idx = G_NS) then
+                    o_wbm_stl(m) <= '0'; 
+                    o_wbm_ack(m) <= '0'; 
+                    o_wbm_err(m) <= intercon_wbs_err;
+                    o_wbm_dat(m) <= (others=>'-');
+                else 
+                    o_wbm_stl(m) <= (request_m and not grant(m)(s_idx)) or i_wbm_stl(s_idx); 
+                    o_wbm_ack(m) <= i_wbs_ack(s_idx);
+                    o_wbm_err(m) <= i_wbs_err(s_idx);
+                    o_wbm_dat(m) <= i_wbs_dat(s_idx);
+                end if;
+        end process;
+
+        -- route from master to selected slave
+        process (all)
+        begin
+            if grant(m)(s_idx) then
+                o_wbs_cyc(s_idx) <= i_wbm_cyc(m); 
+                o_wbs_stb(s_idx) <= i_wbm_stb(m); 
+                o_wbs_adr(s_idx) <= i_wbm_adr(m); 
+                o_wbs_wen(s_idx) <= i_wbm_wen(m); 
+                o_wbs_sel(s_idx) <= i_wbm_sel(m); 
+                o_wbs_dat(s_idx) <= i_wbm_dat(m); 
+            end if;
+        end process;
         
-        -- slave watchdog counters
         
-        -- outstanding transactions counters
+        -- Errors
+        -- 1. crossing slave boundry 
+        --      if (stb and cyc and s_idx_current /= s_idx_last)
+        -- 2. addressing non-existant slave
+        --      if (stb and cyc and s_idx_current = G_NS)
+        -- 3. watchdog timeout 
+        --      timer starts on stb and cyc
+        --      timer clears on that stb and cyc's ack
+        process (i_clk)
+        begin
+            if rising_edge(i_clk) then
+                if (i_rst) then
+                    intercon_wbs_err <= '0'; 
+                else 
+                    if s_idx = G_NS and i_wbm_cyc(m) and i_wbm_stb(m) then
+                        intercon_wbs_err <= '1'; 
+                    else 
+                        intercon_wbs_err <= '0'; 
+                    end if;
+                end if; 
+            end if;
+        end process;
+
+        
+
+        
         
 
     end generate;
 
 
-    gen_slaves : for s in G_NUM_SLAVES'range generate
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    gen_slaves : for s in G_NS'range generate
+        signal higher_pri_req : std_logic_vector(G_NM-1 downto 0);
+    begin
+        
+        -- grants
+        
+        higher_pri_req(0) <= '0'; 
+        process (all)
+        begin
+            for m in 0 to G_NM-2 loop
+                higher_pri_req(m+1) <= higher_pri_req(m) or request(m)(s);
+            end loop;
+        end process;
+
+        process (all)
+        begin
+            for m in G_NM'range loop
+                grant(m)(s) <= request(m)(s) and not higher_pri_req(m); 
+            end loop;
+        end process;
+
         -- responses 
         
 

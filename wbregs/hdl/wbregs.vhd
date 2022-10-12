@@ -19,6 +19,10 @@
 -- in case the user wants to create an address space larger than the number of 
 -- registers. This is so that the user can skip addresses and have more manual 
 -- control if desired
+-- REG_RESET_VAL will do nothing to RO_REG, only RW_REGS need to be reset 
+-- G_REG_USED_BITS will optomize out unused RW flipflops. Does no optomization
+-- on RO bits (because they arent actually registered)
+-- Synthesizer will optomize out unused i_regs and o_regs indexes 
 
 -- assumes little endian accross the board 
 -- assumes all accesses are aligned to G_DAT_WIDTH_LOG2
@@ -26,21 +30,8 @@
 
 -- #############################################################################
 
--- TODO: need to add REG_RESERVED_BITS generic
--- If a RO bit is reserved, i_regs(reserved_bit) will not do anything and
--- o_wbs_dat(reserved_bit) will always read back a 0
---
--- If a RW bit is reserved, i_wbs_dat(reserved_bit) will not do anything and 
--- o_regs(reserved_bit) will always read back a 0. We can optomize out reserved
--- bits from o_regs (tie output directly to 0 rather than registering the zero
--- before outputting)
---
--- REG_RESET_VAL will do nothing to RO_REG, only RW_REGS need to be reset 
--- (assuming I stop registering the input 2D vector i_regs)
-
--- TODO: update so that unused bits are optomized out (tied to 0 instead 
--- of using a register for lower utilization)
 -- Consider adding another cycle in to possibly speed up timing
+-- Make an external wishbone pipeline module 
 
 -- TODO: add assertion checks at the bottom
 
@@ -56,8 +47,8 @@ entity wbregs is
         G_NUM_ADR_BITS   : positive := 7;
         G_REG_ADR        : slv_array_t(G_NUM_REGS-1 downto 0)(G_NUM_ADR_BITS-1 downto 0);
         G_REG_TYPE       : regtype_array_t(G_NUM_REGS-1 downto 0);
-        G_REG_RST_VAL    : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
-        G_REG_USED_BITS  : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
+        G_REG_RST_VAL    : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
+        G_REG_USED_BITS  : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
         G_EN_ASSERT      : boolean := TRUE
     );
     port(
@@ -77,39 +68,41 @@ entity wbregs is
         o_wbs_dat : out std_logic_vector((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
         -- Register Interface
-        i_regs : in  slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
-        o_regs : out slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
+        i_regs : in  slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
+        o_regs : out slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
         -- Register R/W Interface
-        o_rd_stb : out std_logic_vector(G_NUM_REGS-1 downto 0);
-        o_wr_stb : out std_logic_vector(G_NUM_REGS-1 downto 0)
+        o_rd_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0);
+        o_wr_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0)
 
     );
 end wbregs;
 
 
 architecture rtl of wbregs is 
-    -- Registers
-    signal regs_out_r : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_LOG2)-1 downto 0);
+    -- Registers / Wires (depends on generics)
+    signal regs_out : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
     -- Wires
     signal idx : integer;
-    signal misaligned_err : std_logic;
-    signal non_exist_err : std_logic;
     signal sel_mask : std_logic_vector((2 ** G_DAT_WIDTH_L2)-1 downto 0);
+    signal valid_wb_write : std_logic;
+    signal valid_wb_read  : std_logic;
 
 begin
     -- Assign Outputs ----------------------------------------------------------
     -- -------------------------------------------------------------------------
     o_wbs_stl <= '0';
-    o_regs <= regs_out_r;
+    o_wbs_err <= '0';
+    o_regs <= regs_out;
 
 
     -- Simple Comb Logic -------------------------------------------------------
     -- -------------------------------------------------------------------------
     idx <= to_integer(unsigned(i_wbs_adr(G_NUM_ADR_BITS-1 downto G_DAT_WIDTH_L2-3)));
-    misaligned_err <= '1' when G_DAT_WIDTH_L2 > 3 and to_integer(unsigned(i_wbs_adr(G_DAT_WIDTH_LOG2-4 downto 0))) > 0 else '0';
-    non_exist_err <= '1' when idx > G_NUM_REGS;
+    valid_wb_write <= '1' when i_wbs_cyc and i_wbs_stb and i_wbs_wen else '0';
+    valid_wb_read  <= '1' when i_wbs_cyc and i_wbs_stb and not i_wbs_wen else '0';
+
 
     -- Expand the select signal out to a byte mask 
     process (all)
@@ -119,62 +112,79 @@ begin
         end loop;
     end process;
 
+    -- Only use flip-flops on used bits. Wire others to 0. 
+    gen_rw_bits_loop : for reg_idx in 0 to G_NUM_REGS-1 generate
+        process (i_clk)
+        begin
+            if rising_edge(i_clk) then
+                if (i_rst = '1') then
+                    o_rd_pulse(reg_idx) <= '0';
+                elsif (valid_wb_read = '1' and reg_idx = idx) then
+                    o_rd_pulse(reg_idx) <= '1';
+                else 
+                    o_rd_pulse(reg_idx) <= '0';
+                end if; 
+            end if;
+        end process;
+
+        gen_rw_bits_if : if G_REG_TYPE(reg_idx) = RW_REG generate
+            process (i_clk)
+            begin
+                if rising_edge(i_clk) then
+                    if (i_rst = '1') then
+                        o_wr_pulse(reg_idx) <= '0';
+                    elsif (valid_wb_write = '1' and reg_idx = idx) then
+                        o_wr_pulse(reg_idx) <= '1';
+                    else 
+                        o_wr_pulse(reg_idx) <= '0';
+                    end if; 
+                end if;
+            end process;
+
+            gen_rw_bits_loop2 : for bit_idx in 0 to (2 ** G_DAT_WIDTH_L2)-1 generate
+                gen_rw_bits_if2 : if G_REG_USED_BITS(reg_idx)(bit_idx) = '1' generate
+                    prc_regs_out : process (i_clk) begin
+                        if (rising_edge(i_clk)) then
+                            if (i_rst) then
+                                regs_out(reg_idx)(bit_idx) <= G_REG_RST_VAL(reg_idx)(bit_idx);
+                            elsif (valid_wb_write = '1' and reg_idx = idx) then
+                                regs_out(reg_idx)(bit_idx) <= i_wbs_dat(bit_idx) and sel_mask(bit_idx);
+                            end if; 
+                        end if; 
+                    end process;
+
+                else generate
+                    regs_out(reg_idx)(bit_idx) <= '0';
+
+                end generate; 
+            end generate;
+        else generate 
+            o_wr_pulse(reg_idx) <= '0';
+            regs_out(reg_idx) <= (others=>'0');
+
+        end generate;
+    end generate;
+
 
     -- WBS Process -------------------------------------------------------------
     -- -------------------------------------------------------------------------
     prc_wbs : process (i_clk) begin
         if (rising_edge(i_clk)) then
             if (i_rst = '1') then
-                o_wbs_dat <= (others=>'0');
-                o_wbs_err <= '0';
+                o_wbs_dat <= (others=>'-');
                 o_wbs_ack <= '0';
-                o_wr_stb <= (others=>'0');
-                o_rd_stb <= (others=>'0');
-
-                for reg_idx in 0 to G_NUM_REGS-1 loop
-                    if (G_REG_TYPE(reg_idx) = RW_REG) then
-                        regs_out_r(reg_idx) <= G_REG_RST_VAL(reg_idx);
-                    end if;
-                end loop;
-
             else
-                -- If valid WB x-action
-                if (i_wbs_cyc = '1' and i_wbs_stb = '1') then
-                    if (misaligned_err = '1' or non_exist_err = '1') then
-                        o_wbs_err <= '1';
+                if (valid_wb_write) then
+                    o_wbs_ack <= '1';
+                elsif (valid_wb_read) then
+                    o_wbs_ack <= '1';
 
-                    -- WB Write
-                    elsif (i_wbs_wen = '1') then
-                        if (G_REG_TYPE(idx) = RW_REG) then
-                            o_wr_stb(idx) <= '1';
-                            o_wbs_ack <= '1';
-
-                            for i in i_wbs_dat'range loop
-                                regs_out_r(idx)(i) <= i_wbs_dat(i) and sel_mask(i) and G_REG_USED_BITS(idx)(i);
-                            end loop;
-                        else
-                            -- error if attempt to write to a RO_REG
-                            o_wbs_err <= '1';
-                        end if;
-
-                    -- WB Read 
+                    if (G_REG_TYPE(idx) = RO_REG) then
+                        o_wbs_dat <= i_regs(idx) and sel_mask and G_REG_USED_BITS(idx);
                     else 
-                        o_rd_stb(idx) <= '1';
-                        o_wbs_ack <= '1';
-
-                        for i in o_wbs_dat'range loop
-                            if (G_REG_TYPE(idx) = RO_REG) then
-                                o_wbs_dat(i) <= i_regs(idx)(i) and sel_mask(i) and G_REG_USED_BITS(idx)(i);
-                            else 
-                                o_wbs_dat(i) <= regs_out_r(idx)(i) and sel_mask(i);
-                            end if; 
-                        end loop;
+                        o_wbs_dat <= regs_out(idx) and sel_mask; 
                     end if;
                 else 
-                    o_wr_stb <= (others=>'0');
-                    o_rd_stb <= (others=>'0');
-
-                    o_wbs_err <= '0';
                     o_wbs_ack <= '0';
                 end if;
             end if;
@@ -185,7 +195,8 @@ begin
     -- assert to check that the user assigns an address that is too big to fit
     -- in the address space or is misaligned
     -- assert to check if G_NUM_ADR_BITS-1 < G_DAT_WIDTH_LOG2-3
-    -- 
+    --misaligned_err <= '1' when G_DAT_WIDTH_L2 > 3 and to_integer(unsigned(i_wbs_adr(G_DAT_WIDTH_L2-4 downto 0))) > 0 else '0';
+    --non_exist_err <= '1' when idx > G_NUM_REGS;
     -- Assertions --------------------------------------------------------------
     -- -------------------------------------------------------------------------
     -- gen_assertions : if (G_EN_ASSERT = TRUE) generate

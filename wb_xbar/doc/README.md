@@ -7,7 +7,7 @@
 * No slave address overlapping
   * Can enforce this via assertions of config generics
 * Master may not cross slaves during one cyc transaction
-  * This prevents the issue of receiving data out of order (sifferent slaves 
+  * This prevents the issue of receiving data out of order (different slaves 
     may have different latencies. A single slave guarentees transactions
     are acked in order).
 * One cycle latency from master to slave
@@ -56,17 +56,26 @@ if request and grant are both low, then the master is idle
 there is not a situation where grant is high and request is low.
 
    * request gets granted if:
-       1. A master of higher priority is not requesting or has not been granted 
+       1. A master of higher priority has not been granted 
           access to the same slave  
+        1. the slave is not already occupied by any other master 
    * if there is an ungranted request, then that master must be stalled 
 
-3. once the master has gotten its request thru to the slave, it is now up to the 
+1. once the master has gotten its request thru to the slave, it is now up to the 
    slave to respond with an ack. The xbar just waits for an ack
-4. xbar combinationally routes the ack and associated data (if it was a read 
+2. xbar combinationally routes the ack and associated data (if it was a read 
    request) to the master it is connected to. 
    * It knows which master it is connected to based off of the grant[][] value
 
+## Rules 
 
+1. no more than one master can be connected to one slave 
+2. no more than one slave can be connected to one master 
+3. if master addresses a salve that doesnt exist, the interconnect must respond with an errror
+4. interconnect cannot change the grant for a given master while that master is
+   still waiting on a response from a slave
+5. interconnect must generate an error if a slave doesnt respond within a given time window 
+6. interconnect must error if master tries to cahnge salves mid cycle 
 
 ## Exceptional Conditions
 

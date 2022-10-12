@@ -27,8 +27,11 @@ entity wbregs_example is
         i_in_vec0  : in  std_logic_vector(15 downto 0);
         i_in_vec1  : in  std_logic_vector(31 downto 0);
         o_out_bit0 : out std_logic;
-        o_out_vec0 : out std_logic_vector(8 downto 0);
-        o_out_vec1 : out std_logic_vector(31 downto 0)
+        o_out_vec0 : out std_logic_vector(7 downto 0);
+        o_out_vec1 : out std_logic_vector(31 downto 0);
+
+        o_rd_pulse : out std_logic_vector(5 downto 0);
+        o_wr_pulse : out std_logic_vector(5 downto 0)
 
     );
 end wbregs_example;
@@ -59,7 +62,7 @@ architecture rtl of wbregs_example is
 
     -- wbregs generics ---------------------------------------------------------
     -- -------------------------------------------------------------------------
-    constant C_DAT_WIDTH_LOG2 : positive := 5;
+    constant C_DAT_WIDTH_L2 : positive := 5;
     constant C_NUM_REGS       : positive := 6;
     constant C_NUM_ADR_BITS   : positive := 8;
 
@@ -85,7 +88,7 @@ architecture rtl of wbregs_example is
         );
 
     constant C_REG_RST_VAL    :
-        slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_LOG2)-1 downto 0) :=
+        slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0) :=
         (
             REG0_RO => X"0000_0010",
             REG1_RO => X"0000_0010",
@@ -96,7 +99,7 @@ architecture rtl of wbregs_example is
         );
 
     constant C_REG_USED_BITS  :
-        slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_LOG2)-1 downto 0) :=
+        slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0) :=
         (
             REG0_RO => X"0000_0001",
             REG1_RO => X"FFFF_0000",
@@ -109,8 +112,8 @@ architecture rtl of wbregs_example is
 
     constant C_EN_ASSERT      : boolean := TRUE;
 
-    signal regs_in  : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_LOG2)-1 downto 0);
-    signal regs_out : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_LOG2)-1 downto 0);
+    signal regs_in  : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0);
+    signal regs_out : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0);
     signal rd_stb : std_logic_vector(C_NUM_REGS-1 downto 0);
     signal wr_stb : std_logic_vector(C_NUM_REGS-1 downto 0);
 
@@ -128,7 +131,7 @@ begin
     -- -------------------------------------------------------------------------
     register_interface : entity work.wbregs(rtl)
     generic map (
-        G_DAT_WIDTH_LOG2 => C_DAT_WIDTH_LOG2,
+        G_DAT_WIDTH_L2 => C_DAT_WIDTH_L2,
         G_NUM_REGS       => C_NUM_REGS,
         G_NUM_ADR_BITS   => C_NUM_ADR_BITS,
         G_REG_ADR        => C_REG_ADR,
@@ -171,10 +174,18 @@ begin
     r4_v0 <= regs_out(REG4_RW)(REG4_VEC0);
     r5_v0 <= regs_out(REG5_RW)(REG5_VEC0);
 
+
     -- Connect Register Interface to Standalone Design -------------------------
     -- -------------------------------------------------------------------------
+    r0_b0 <= i_in_bit0;
+    r1_v0 <= i_in_vec0;
+    r2_v0 <= i_in_vec1;
 
-    -- Connect to standalone design here
+    o_out_bit0 <= r3_b0;
+    o_out_vec0 <= r4_v0;
+    o_out_vec1 <= r5_v0;
 
+    o_rd_pulse <= rd_stb;
+    o_wr_pulse <= wr_stb; 
 
 end architecture; 
