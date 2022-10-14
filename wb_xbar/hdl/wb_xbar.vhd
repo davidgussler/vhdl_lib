@@ -46,40 +46,41 @@ entity wb_xbar is
         G_CONN_MATRIX : slv_array_t(G_NM-1 downto 0)(G_NS-1 downto 0) := (B"11","11");
         -- Maximum number of outstanding transactions
         -- If a master sends this number of transactions in a bus cycle without 
-        -- receiving any acks, then stall. 
-        G_MX_OUTSTANDING_L2 : positive range 1 to 8 := 6; 
+        -- receiving any acks, then error
+        G_MAX_OUTSTAND : positive := 64; 
         -- if false, then M0 has highest priority, M1 has second highest, etc
         -- if true, priority starts with M0, and shifts to M1 after M0 gets a 
         -- transaction thru. Proirity shifts every time the highest priority
         -- master completes a transaction. Actually, not sure about this.
         -- I need plan out how round robin mode will be implemented. 
+        G_WATCHDOG_CYCLES : positive := 64;
         G_ROUND_ROBIN : boolean := FALSE
     );
     port (
         i_clk : std_logic; 
         i_rst : std_logic; 
 
-        i_wbm_cyc : std_logic_vector(G_NS-1 downto 0);
-        i_wbm_stb : std_logic_vector(G_NS-1 downto 0);
-        i_wbm_adr : slv_array_t     (G_NS-1 downto 0)(G_ADR_W-1 downto 0); 
-        i_wbm_wen : std_logic_vector(G_NS-1 downto 0);
-        i_wbm_sel : slv_array_t     (G_NS-1 downto 0)((2 ** (G_DAT_W_L2-3))-1 downto 0); 
-        i_wbm_dat : slv_array_t     (G_NS-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
-        o_wbm_stl : std_logic_vector(G_NS-1 downto 0); 
-        o_wbm_ack : std_logic_vector(G_NS-1 downto 0); 
-        o_wbm_err : std_logic_vector(G_NS-1 downto 0); 
-        o_wbm_dat : slv_array_t     (G_NS-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
+        i_wbm_cyc : in  std_logic_vector(G_NM-1 downto 0);
+        i_wbm_stb : in  std_logic_vector(G_NM-1 downto 0);
+        i_wbm_adr : in  slv_array_t     (G_NM-1 downto 0)(G_ADR_W-1 downto 0); 
+        i_wbm_wen : in  std_logic_vector(G_NM-1 downto 0);
+        i_wbm_sel : in  slv_array_t     (G_NM-1 downto 0)((2 ** (G_DAT_W_L2-3))-1 downto 0); 
+        i_wbm_dat : in  slv_array_t     (G_NM-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
+        o_wbm_stl : out std_logic_vector(G_NM-1 downto 0); 
+        o_wbm_ack : out std_logic_vector(G_NM-1 downto 0); 
+        o_wbm_err : out std_logic_vector(G_NM-1 downto 0); 
+        o_wbm_dat : out slv_array_t     (G_NM-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
 
-        o_wbs_cyc : std_logic_vector(G_NS-1 downto 0);
-        o_wbs_stb : std_logic_vector(G_NS-1 downto 0);
-        o_wbs_adr : slv_array_t     (G_NS-1 downto 0)(63 downto 0);
-        o_wbs_wen : std_logic_vector(G_NS-1 downto 0);
-        o_wbs_sel : slv_array_t     (G_NS-1 downto 0)((2 ** (G_DAT_W_L2-3))-1 downto 0);
-        o_wbs_dat : slv_array_t     (G_NS-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
-        i_wbs_stl : std_logic_vector(G_NS-1 downto 0); 
-        i_wbs_ack : std_logic_vector(G_NS-1 downto 0); 
-        i_wbs_err : std_logic_vector(G_NS-1 downto 0); 
-        i_wbs_dat : slv_array_t     (G_NS-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
+        o_wbs_cyc : out std_logic_vector(G_NS-1 downto 0);
+        o_wbs_stb : out std_logic_vector(G_NS-1 downto 0);
+        o_wbs_adr : out slv_array_t     (G_NS-1 downto 0)(63 downto 0);
+        o_wbs_wen : out std_logic_vector(G_NS-1 downto 0);
+        o_wbs_sel : out slv_array_t     (G_NS-1 downto 0)((2 ** (G_DAT_W_L2-3))-1 downto 0);
+        o_wbs_dat : out slv_array_t     (G_NS-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
+        i_wbs_stl : in  std_logic_vector(G_NS-1 downto 0); 
+        i_wbs_ack : in  std_logic_vector(G_NS-1 downto 0); 
+        i_wbs_err : in  std_logic_vector(G_NS-1 downto 0); 
+        i_wbs_dat : in  slv_array_t     (G_NS-1 downto 0)((2 ** G_DAT_W_L2)-1 downto 0);
     );
 end entity wb_xbar;
 
@@ -87,11 +88,84 @@ end entity wb_xbar;
 -- Architecture
 -- -----------------------------------------------------------------------------
 architecture rtl of wb_xbar is
-    signal request : slv_array_t (G_NM-1 downto 0)(G_NS-1 downto 0);
-    signal grant : slv_array_t (G_NM-1 downto 0)(G_NS-1 downto 0);
 
+    signal r_s_idx, s_idx : int_array_t(0 to G_NM) range 0 to G_NS;
+
+    signal sgrant : std_logic_vector(G_NS-1 downto 0);
+    
+    signal bus_grant : std_logic_vector(G_NM-1 downto 0);
+    signal request : std_logic_vector(G_NM-1 downto 0);
 
 begin
+
+    gen_slaves : for s in G_NS'range generate
+        signal mgrant : std_logic_vector(G_NM-1 downto 0);
+        signal m_idx : integer range 0 to G_NM;
+    begin     
+        -- Any Master Granted This Slave ---------------------------------------
+        -- ---------------------------------------------------------------------
+        -- 
+        -- sgrant(s) = 1 when any master has been granted slave s
+        --   many sgrant bits may be set (eg: 2 different masters may access 
+        --   2 different slaves)
+        -- mgrant(m) = 1 when master m has been granted this slave
+        --   only one mgrant bit is set at a time (eg: only one master may access
+        --   this specific slave at a time)
+        process (all)
+        begin
+            for m in G_NM'range loop
+                mgrant(m) <= bus_grant(m) and s = s_idx(m); -- TODO: s_idx needs to be delayed by 1;
+            end loop;
+        end process;
+        sgrant(s) <= or(mgrant); 
+
+
+        -- Master Index ------------------------------------------------------
+        -- ---------------------------------------------------------------------
+        -- 
+        -- Determine the index of the master that is accessing this slave
+        -- This process assumes that only one master is granted this slave at 
+        -- a time (should be guarenteed by the bus fsm)
+        -- If m_idx = G_NM then this indicates that NO master is accessing this 
+        -- slave
+        process (all)
+        begin
+            for m in G_NM'range loop
+                m_idx <= G_NM;
+                if mgrant(m) then
+                    m_idx <= m;
+                end if; 
+            end loop;
+        end process;
+        
+
+        -- Master to Slave Routing ---------------------------------------------
+        -- ---------------------------------------------------------------------
+        process (all)
+        begin
+            -- If a master has been granted this slave
+            if sgrant(s) then
+                o_wbs_cyc(s) <= i_wbm_cyc(m_idx); -- TODO: Change these to their delayed by 1 cycle variant
+                o_wbs_stb(s) <= i_wbm_stb(m_idx); 
+                o_wbs_adr(s) <= i_wbm_adr(m_idx); 
+                o_wbs_wen(s) <= i_wbm_wen(m_idx); 
+                o_wbs_sel(s) <= i_wbm_sel(m_idx); 
+                o_wbs_dat(s) <= i_wbm_dat(m_idx); 
+
+            -- If this slave is disconnected
+            else 
+                o_wbs_cyc(s) <= '0'; 
+                o_wbs_stb(s) <= '0'; 
+                o_wbs_adr(s) <= (others=>'-');
+                o_wbs_wen(s) <= '-'; 
+                o_wbs_sel(s) <= (others=>'-');
+                o_wbs_dat(s) <= (others=>'-');
+            end if;
+        end process;
+
+    end generate;
+
+
 
     gen_masters : for m in G_NM'range generate
     
@@ -101,198 +175,354 @@ begin
         constant C_ADR_DECODE_W  : integer := C_ADR_DECODE_HI - C_ADR_DECODE_LO;
 
         signal decoder_adr : std_logic_vector(C_ADR_DECODE_W-1 downto 0);
-        signal s_idx : integer range 0 to G_NS;
+
+        signal higher_priority_request : std_logic;
+
+        signal outstand_xactions : natural range 0 to G_MAX_OUTSTAND-1;
+        signal no_outstand_xactions : std_logic;
+        signal error_outstand_xactions : std_logic;
+        
+        signal wd_cnt : natural range 0 to G_WATCHDOG_CYCLES-1;
+        signal wd_timeout : std_logic;
+
+        type bus_state_t is (S_IDLE, S_STALL, S_GRANT, S_FLUSH, S_ERROR);
+        signal bus_state, nxt_bus_state : bus_state_t;
+
+        signal bus_stall : std_logic;
+        signal bus_error : std_logic;
+        signal bus_flush : std_logic;
 
     begin 
-
-        -- -- Buffers
-        -- u_skid_buff: entity work.skid_buff(rtl)
-        -- generic map (
-        --     G_WIDTH    => 32,
-        --     G_REG_OUTS => false
-        -- )
-        -- port map (
-        --     i_clk   => i_clk,
-        --     i_rst   => i_rst,
-        --     i_valid => 
-        --     o_ready => 
-        --     i_data  => 
-        --     o_valid => 
-        --     i_ready => 
-        --     o_data  => 
-        -- );
-
         -- Address decoding ----------------------------------------------------
-        
+        -- ---------------------------------------------------------------------
+        --
         -- Grab the upper bits of the incomming address that should be used to 
         -- determine which slave the master is requesting.
+        -- This process assumes that each slave is assigned a unique address region
+        -- If this is not the case, then this logic will always select the salve 
+        -- with the larger index.
         decoder_adr <= i_wbm_adr(m)(C_ADR_DECODE_RANGE);
         process (all)
         begin
             -- G_NS means that master m is not addressing a valid slave s
-            s_idx <= G_NS; 
+            s_idx(m) <= G_NS; 
             for s in G_NS'range loop
                 if (G_S_BASE_ADR(s)(C_ADR_DECODE_RANGE) = decoder_adr) then
-                    s_idx <= s;
+                    s_idx(m) <= s;
                 end if;
             end loop;
         end process;
 
-        -- register the index on a valid transaction
+        -- Register the last index on a new valid transaction
         process (i_clk)
         begin
             if rising_edge(i_clk) then
-                if (i_rst) then
-                    r_s_idx <= 0; 
-                else 
-                    if i_wbm_cyc(m) and i_wbm_stb(m) then
-                        r_s_idx <= s_idx; 
-                    end if;
-                end if; 
+                if i_rst then
+                    r_s_idx(m) <= G_NS; 
+                elsif request(m) then
+                    r_s_idx(m) <= s_idx(m); 
+                end if;
             end if;
         end process;
 
 
+        -- Bus Requests --------------------------------------------------------
+        -- ---------------------------------------------------------------------
+        -- 
+        -- This master is requesting any slave
+        request(m) <= i_wbm_cyc(m) and i_wbm_stb(m); 
 
-
-
-
-
-
-
-
-
-        if (i_wbm_cyc(m) and i_wbm_stb(m) and ) and 
-        
-
-        -- requests
-        request(m)(r_s_idx) <= r_wbm_cyc(m);
-        request_m <= r_wbm_cyc(m);
-        
-        -- grants
-        higher_pri_req(0) <= '0'; 
-        higher_pri_req(m+1) <= higher_pri_req(m) or request_m;
-
+        -- A master with higher priority is requesting the same slave as this 
+        -- master.. ie: a bus conflict / contention over the same resource
         process (all)
         begin
-            other_master_has_slave <= '0';
-            for m2 in G_NM'range loop
-                if (m /= m2) then
-                    if (grant(m2)(s_idx)) then
-                        other_master_has_slave <= '1';
-                    end if; 
-                end if;
-            end loop;
+            higher_priority_request <= '0';
+            if (m = 0) then 
+                higher_priority_request <= '0';
+            else 
+                for m_higher in 0 to m-1 loop
+                    if request(m_higher) = '1' and s_idx(m) = s_idx(m_higher) then
+                        higher_priority_request <= '1';
+                    end if;
+                end loop;
+            end if; 
         end process;
 
-        grant(m)(s_idx) <= 
-                request_m and ((not higher_pri_req(m) and not other_master_has_slave) or s_idx = G_NS);
-        
 
+
+        -- Slave to Master Routing ------------------------------------
+        -- ---------------------------------------------------------------------
         -- route responses from slaves back to masters
         process (all)
         begin
-            if grant(m)(s_idx) then
-                if (s_idx = G_NS) then
-                    o_wbm_stl(m) <= '0'; 
-                    o_wbm_ack(m) <= '0'; 
-                    o_wbm_err(m) <= intercon_wbs_err;
-                    o_wbm_dat(m) <= (others=>'-');
-                else 
-                    o_wbm_stl(m) <= (request_m and not grant(m)(s_idx)) or i_wbm_stl(s_idx); 
-                    o_wbm_ack(m) <= i_wbs_ack(s_idx);
-                    o_wbm_err(m) <= i_wbs_err(s_idx);
-                    o_wbm_dat(m) <= i_wbs_dat(s_idx);
-                end if;
-        end process;
-
-        -- route from master to selected slave
-        process (all)
-        begin
-            if grant(m)(s_idx) then
-                o_wbs_cyc(s_idx) <= i_wbm_cyc(m); 
-                o_wbs_stb(s_idx) <= i_wbm_stb(m); 
-                o_wbs_adr(s_idx) <= i_wbm_adr(m); 
-                o_wbs_wen(s_idx) <= i_wbm_wen(m); 
-                o_wbs_sel(s_idx) <= i_wbm_sel(m); 
-                o_wbs_dat(s_idx) <= i_wbm_dat(m); 
+            if bus_grant(m) then
+                o_wbm_stl(m) <= bus_stall or i_wbs_stl(r_s_idx); 
+                o_wbm_ack(m) <= i_wbs_ack(r_s_idx);
+                o_wbm_err(m) <= bus_error or i_wbs_err(r_s_idx);
+                o_wbm_dat(m) <= i_wbs_dat(r_s_idx);
+            else 
+                o_wbm_stl(m) <= '0';
+                o_wbm_ack(m) <= '0';
+                o_wbm_err(m) <= '0';
+                o_wbm_dat(m) <= (others=>'-');
             end if;
         end process;
-        
-        
-        -- Errors
-        -- 1. crossing slave boundry 
-        --      if (stb and cyc and s_idx_current /= s_idx_last)
-        -- 2. addressing non-existant slave
-        --      if (stb and cyc and s_idx_current = G_NS)
-        -- 3. watchdog timeout 
-        --      timer starts on stb and cyc
-        --      timer clears on that stb and cyc's ack
+
+
+
+
+        -- Outstanding Transactions Tracker ------------------------------------
+        -- ---------------------------------------------------------------------
         process (i_clk)
         begin
             if rising_edge(i_clk) then
-                if (i_rst) then
-                    intercon_wbs_err <= '0'; 
+                if i_rst then
+                    outstand_xactions <= 0;
                 else 
-                    if s_idx = G_NS and i_wbm_cyc(m) and i_wbm_stb(m) then
-                        intercon_wbs_err <= '1'; 
+                    if bus_grant(m) then
+                        if wbs_stb and wbs_ack and not wbs_stall then
+                            outstand_xactions <= outstand_xactions;
+                        elsif wbs_stb and not wbs_stall and not bus_flush then
+                            outstand_xactions <= outstand_xactions + 1;
+                        elsif wbs_ack then
+                            outstand_xactions <= outstand_xactions - 1;
+                        end if;
                     else 
-                        intercon_wbs_err <= '0'; 
+                        outstand_xactions <= 0;
                     end if;
-                end if; 
+                end if;
+            end if;
+        end process;
+
+        no_outstand_xactions <= '1' when outstand_xactions = 0 else '0';
+        error_outstand_xactions <= '1' when outstand_xactions = G_MAX_OUTSTAND-1 else '0'; 
+
+
+
+        -- Slave Watchdog ------------------------------------------------------
+        -- ---------------------------------------------------------------------
+        process (i_clk)
+        begin
+            if rising_edge(i_clk) then
+                if i_rst then
+                    wd_cnt <= 0;
+                else 
+                    if bus_grant(m) then
+                        if wbs_ack or (wbs_stb and not wbs_stall) then
+                            wd_cnt <= 0;
+                        else
+                            wd_cnt <= wd_cnt + 1;
+                        end if;
+                    else 
+                        wd_cnt <= 0;
+                    end if;
+                end if;
+            end if;
+        end process;
+
+        wd_timeout <= '1' when wd_cnt = G_WATCHDOG_CYCLES else '0';
+
+
+
+        -- FSM -----------------------------------------------------------------
+        -- ---------------------------------------------------------------------
+        -- 
+        -- FSM Next State
+        process (all)
+        begin
+            -- Default to staying in current state
+            nxt_bus_state <= bus_state;
+
+            case bus_state is
+            -- -------------------------------------------------------------
+            when S_IDLE =>
+            -- -------------------------------------------------------------
+                -- If a higher priority master inits a request
+                if request(m) and higher_priority_request then
+                    nxt_bus_state <= S_STALL;
+
+                -- If another master has already been granted this slave
+                elsif request(m) and sgrant(s_idx) then
+                    nxt_bus_state <= S_STALL;
+                    
+                -- If the master is requesting a non-existant slave
+                elsif request(m) and s_idx(m) = G_NS then 
+                    nxt_bus_state <= S_ERROR;
+
+                -- No errors or bus contention
+                elsif request(m) then
+                    nxt_bus_state <= S_GRANT;
+
+                end if;
+
+            -- -------------------------------------------------------------
+            when S_STALL =>
+            -- -------------------------------------------------------------
+                -- If master aborts transaction
+                if not i_wbm_cyc then
+                    nxt_bus_state <= S_IDLE;
+
+                -- If a higher priority master inits a request
+                elsif request(m) and higher_priority_request then
+                    nxt_bus_state <= S_STALL;
+
+                -- If another master has already been granted this slave
+                elsif request(m) and sgrant(s_idx(m)) then
+                    nxt_bus_state <= S_STALL;
+                    
+                -- If the master is requesting a non-existant slave
+                elsif request(m) and s_idx(m) = G_NS then 
+                    nxt_bus_state <= S_ERROR;
+
+                -- No errors or bus contention
+                elsif request(m) then
+                    nxt_bus_state <= S_GRANT;
+
+                end if;
+
+            -- -------------------------------------------------------------
+            when S_GRANT =>
+            -- -------------------------------------------------------------
+                -- If master releases this slave
+                if not i_wbm_cyc then
+                    nxt_bus_state <= S_IDLE;
+                    
+                -- If master tries to switch to a different slave mid-cyc
+                elsif request(m) and (s_idx(m) /= r_s_idx(m)) then
+
+                    -- If erroneous x-action and slave has responded to all previous 
+                    -- requests
+                    if no_outstand_xactions then
+                        nxt_bus_state <= S_ERROR;
+                    
+                    -- Erroneous x-action BUT there are still outstanding requests
+                    -- with the selected slave. To maintain transaction ordering
+                    -- we must wait for the slave to ack the outstanding legal requests 
+                    -- before issuing an error to the master
+                    else 
+                        nxt_bus_state <= S_FLUSH;
+                    end if;
+            
+                -- If too many clockcycles have elapsed since the last stb
+                -- and the master hasnt received an ack, then the slave is 
+                -- not responsive
+                elsif wd_timeout then 
+                    nxt_bus_state <= S_ERROR;
+                
+                -- If master has sent the maximum number of outstanding transactions
+                -- and not received a response 
+                elsif error_outstand_xactions then
+                    nxt_bus_state <= S_STALL;
+                    -- TODO: maybe make this an error instead of a stall
+                
+
+
+                end if;
+
+            -- -------------------------------------------------------------
+            when S_FLUSH =>    
+            -- -------------------------------------------------------------
+                -- If master releases this slave
+                if not i_wbm_cyc then
+                    nxt_bus_state <= S_IDLE;
+    
+                -- If slave has responded to all outstanding (legal) requests
+                elsif no_outstand_xactions then
+                    nxt_bus_state <= S_ERROR;
+                
+                -- If master has sent the maximum number of outstanding transactions
+                -- and the slave has not responded.  
+                elsif error_outstand_xactions then
+                    nxt_bus_state <= S_ERROR;
+
+                end if;
+
+            -- -------------------------------------------------------------
+            when S_ERROR => 
+            -- -------------------------------------------------------------
+                nxt_bus_state <= S_IDLE;
+
+            when others =>
+                null;
+
+            end case;
+        end process;
+
+
+        -- FSM Output
+        process (i_clk)
+        begin
+            if rising_edge(i_clk) then
+                if i_rst then
+                    bus_state    <= S_IDLE;
+
+                    bus_grant(m) <= '0';
+                    bus_stall    <= '0';
+                    bus_error    <= '0';
+                    bus_flush    <= '0';
+                else 
+                    -- Advance the state 
+                    bus_state <= nxt_bus_state;
+
+                    -- Assign Outputs
+                    case nxt_bus_state is
+                    -- -----------------------------------------------------
+                    when S_IDLE =>
+                    -- -----------------------------------------------------
+                        bus_grant(m) <= '0';
+                        bus_stall    <= '0';
+                        bus_error    <= '0';
+                        bus_flush    <= '0';
+
+                    -- -----------------------------------------------------
+                    when S_STALL =>
+                    -- -----------------------------------------------------
+                        bus_grant(m) <= '0';
+                        bus_stall    <= '1';
+                        bus_error    <= '0';
+                        bus_flush    <= '0';
+
+                    -- -----------------------------------------------------
+                    when S_GRANT =>
+                    -- -----------------------------------------------------
+                        bus_grant(m) <= '1';
+                        bus_stall    <= '0';
+                        bus_error    <= '0';
+                        bus_flush    <= '0';
+
+                    -- -----------------------------------------------------
+                    when S_FLUSH =>    
+                    -- -----------------------------------------------------
+                        bus_grant(m) <= '1';
+                        bus_stall    <= '0';
+                        bus_error    <= '0';
+                        bus_flush    <= '1';
+
+                    -- -----------------------------------------------------
+                    when S_ERROR => 
+                    -- -----------------------------------------------------
+                        bus_grant(m) <= '0';
+                        bus_stall    <= '0';
+                        bus_error    <= '1';
+                        bus_flush    <= '0';
+
+                    when others =>
+                        null;
+
+                    end case;
+                end if;
             end if;
         end process;
 
         
 
-        
-        
+
+
 
     end generate;
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    gen_slaves : for s in G_NS'range generate
-        signal higher_pri_req : std_logic_vector(G_NM-1 downto 0);
-    begin
-        
-        -- grants
-        
-        higher_pri_req(0) <= '0'; 
-        process (all)
-        begin
-            for m in 0 to G_NM-2 loop
-                higher_pri_req(m+1) <= higher_pri_req(m) or request(m)(s);
-            end loop;
-        end process;
-
-        process (all)
-        begin
-            for m in G_NM'range loop
-                grant(m)(s) <= request(m)(s) and not higher_pri_req(m); 
-            end loop;
-        end process;
-
-        -- responses 
-        
-
-    end generate;
 
 end architecture rtl;
