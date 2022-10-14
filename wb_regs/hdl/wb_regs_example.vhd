@@ -5,7 +5,7 @@ use ieee.numeric_std.all;
 use work.gen_utils_pkg.all;
 
 
-entity wbregs_example is 
+entity wb_regs_example is 
     port(
         i_clk : in std_logic;
         i_rst : in std_logic;
@@ -34,10 +34,10 @@ entity wbregs_example is
         o_wr_pulse : out std_logic_vector(5 downto 0)
 
     );
-end wbregs_example;
+end entity;
 
 
-architecture rtl of wbregs_example is
+architecture rtl of wb_regs_example is
 
     -- wbregs Constants & Signals ----------------------------------------------
     -- =========================================================================
@@ -63,8 +63,8 @@ architecture rtl of wbregs_example is
     -- wbregs generics ---------------------------------------------------------
     -- -------------------------------------------------------------------------
     constant C_DAT_WIDTH_L2 : positive := 5;
-    constant C_NUM_REGS       : positive := 6;
-    constant C_NUM_ADR_BITS   : positive := 8;
+    constant C_NUM_REGS     : positive := 6;
+    constant C_NUM_ADR_BITS : positive := 8;
 
     constant C_REG_ADR        :
         slv_array_t(C_NUM_REGS-1 downto 0)(C_NUM_ADR_BITS-1 downto 0) :=
@@ -90,12 +90,10 @@ architecture rtl of wbregs_example is
     constant C_REG_RST_VAL    :
         slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0) :=
         (
-            REG0_RO => X"0000_0010",
-            REG1_RO => X"0000_0010",
-            REG2_RO => X"0000_0010",
             REG3_RW => X"0000_0010",
             REG4_RW => X"0000_0010",
-            REG5_RW => X"0000_0010"
+            REG5_RW => X"0000_0010",
+            others  => (others=>'0')
         );
 
     constant C_REG_USED_BITS  :
@@ -131,7 +129,7 @@ begin
     -- -------------------------------------------------------------------------
     register_interface : entity work.wbregs(rtl)
     generic map (
-        G_DAT_WIDTH_L2 => C_DAT_WIDTH_L2,
+        G_DAT_WIDTH_L2   => C_DAT_WIDTH_L2,
         G_NUM_REGS       => C_NUM_REGS,
         G_NUM_ADR_BITS   => C_NUM_ADR_BITS,
         G_REG_ADR        => C_REG_ADR,

@@ -1,9 +1,9 @@
 -- #############################################################################
--- # << Wishbone Registers >> #
+-- # << Wishbone Register Bank >> #
 -- *****************************************************************************
 -- Copyright David N. Gussler 2022
 -- *****************************************************************************
--- File     : wbregs.vhd
+-- File     : wb_regs.vhd
 -- Author   : David Gussler - davidnguss@gmail.com 
 -- Language : VHDL '08
 -- History  :  Date      | Version | Comments 
@@ -40,7 +40,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.gen_utils_pkg.all;
 
-entity wbregs is 
+entity wb_regs is 
     generic(
         G_DAT_WIDTH_L2   : positive range 3 to 6 := 5;
         G_NUM_REGS       : positive := 32;
@@ -76,10 +76,10 @@ entity wbregs is
         o_wr_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0)
 
     );
-end wbregs;
+end entity;
 
 
-architecture rtl of wbregs is 
+architecture rtl of wb_regs is 
     -- Registers / Wires (depends on generics)
     signal regs_out : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
@@ -103,7 +103,6 @@ begin
     valid_wb_write <= '1' when i_wbs_cyc and i_wbs_stb and i_wbs_wen else '0';
     valid_wb_read  <= '1' when i_wbs_cyc and i_wbs_stb and not i_wbs_wen else '0';
 
-
     -- Expand the select signal out to a byte mask 
     process (all)
     begin
@@ -112,6 +111,9 @@ begin
         end loop;
     end process;
 
+
+    -- Register Processes ------------------------------------------------------
+    -- -------------------------------------------------------------------------
     -- Only use flip-flops on used bits. Wire others to 0. 
     gen_rw_bits_loop : for reg_idx in 0 to G_NUM_REGS-1 generate
         process (i_clk)
@@ -212,4 +214,4 @@ begin
     --     -- pragma translate_on 
     --  end generate;    
 
-end rtl;
+end architecture;
