@@ -19,6 +19,7 @@ lib = vu.add_library("lib")
 
 # Add source files to lib
 lib.add_source_files("../../hdl/*.vhd")
+lib.add_source_files("../../../utils/gen_utils_pkg.vhd")
 
 # Add testbench files to lib
 lib.add_source_files("*.vhd")

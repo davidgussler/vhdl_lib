@@ -56,17 +56,28 @@ architecture tb of wb_regs_example_tb is
     signal done  : boolean := false;
 
 
-    -- DUT Signals
+    -- DUT Signals -------------------------------------------------------------
+    -- WB Interface
     signal wbs_cyc : std_logic;
     signal wbs_stb : std_logic;
     signal wbs_adr : std_logic_vector(7 downto 0);
     signal wbs_wen : std_logic;
     signal wbs_sel : std_logic_vector(3 downto 0);
-    signal wbs_dat : std_logic_vector(31 downto 0);
+    signal wbs_dati : std_logic_vector(31 downto 0);
     signal wbs_stl : std_logic; 
     signal wbs_ack : std_logic;
     signal wbs_err : std_logic;
-    signal wbs_dat : std_logic_vector(31 downto 0);
+    signal wbs_dato : std_logic_vector(31 downto 0);
+
+    -- Custom Interface
+    signal in_bit0  : std_logic_vector(0 downto 0);
+    signal in_vec0  : std_logic_vector(15 downto 0);
+    signal in_vec1  : std_logic_vector(31 downto 0);
+    signal out_bit0 : std_logic;
+    signal out_vec0 : std_logic_vector(7 downto 0);
+    signal out_vec1 : std_logic_vector(31 downto 0);
+    signal rd_pulse : std_logic_vector(5 downto 0);
+    signal wr_pulse : std_logic_vector(5 downto 0);
 
 
     -- BFMs
@@ -113,27 +124,42 @@ begin
     end process;
 
 
-    -- Input Stimuli ----------------------------------------------------------
+    -- Input Stimuli -----------------------------------------------------------
     -- -------------------------------------------------------------------------
-    prc_stimuli : process
+    prc_wbm_xactions : process
+        variable rnd : RandomPType; 
+        variable rdata_bref : std_logic_vector(31 downto 0);
+        variable rdata_data : std_logic_vector(31 downto 0);
     begin
         wait until start and rising_edge(clk);
         done <= false;
         wait until rising_edge(clk);
-    
-        info("Sending stream to DUT...");
-    
-        for xact_num in 1 to C_NUM_XACTIONS loop
-            push_axi_stream(
-                net, master_axis, 
-                tdata => std_logic_vector(to_unsigned(xact_num, C_WIDTH))
-            );
-        end loop;
-    
-        info("Stream sent!");
-    
+        
+        info("Writing '0xFEED_DADA' to address '0x04'");
+        write_bus(net, bus_master, X"04", X"FEED_DADA", X"F");
+        info("Write complete!");
+        info("Waiting 10 clockcycles");
+        wait for 10 * C_CLK_PERIOD;
+        info("Initiating a read");
+        read_bus(net, bus_master, X"04", rdata_bref);
+        info("Waiting on ack");
+        --await_read_bus_reply(net, rdata_bref, rdata_data);
+        info("Received ack from slave!");
+        
         wait until rising_edge(clk);
         done <= true;
+    end process;
+
+    -- Changes the input bit vectors to the module to a new randome value on 
+    -- ever clockcycle
+    prc_rand_module_inputs : process
+        variable rnd : RandomPType; 
+    begin
+        wait until rising_edge(clk);
+        in_bit0 <= rnd.RandSlv(Size => 1);
+        in_vec0 <= rnd.RandSlv(Size => 16);
+        in_vec1 <= rnd.RandSlv(Size => 32);
+
     end process;
 
     
@@ -156,21 +182,21 @@ begin
         i_wbs_adr => wbs_adr,
         i_wbs_wen => wbs_wen,
         i_wbs_sel => wbs_sel,
-        i_wbs_dat => wbs_dat,
+        i_wbs_dat => wbs_dati,
         o_wbs_stl => wbs_stl,
         o_wbs_ack => wbs_ack,
         o_wbs_err => wbs_err,
-        o_wbs_dat => wbs_dat,
+        o_wbs_dat => wbs_dato,
 
         -- Custom module interface
-        i_in_bit0  => 
-        i_in_vec0  => RandSlv(Size => 8)
-        i_in_vec1  => 
-        o_out_bit0 => 
-        o_out_vec0 => 
-        o_out_vec1 => 
-        o_rd_pulse => 
-        o_wr_pulse => 
+        i_in_bit0  =>  in_bit0(0),
+        i_in_vec0  =>  in_vec0,
+        i_in_vec1  =>  in_vec1,
+        o_out_bit0 => out_bit0,
+        o_out_vec0 => out_vec0,
+        o_out_vec1 => out_vec1,
+        o_rd_pulse => rd_pulse,
+        o_wr_pulse => wr_pulse
 
     );
 
@@ -183,11 +209,11 @@ begin
         bus_handle => bus_master,
         strobe_high_probability => 1.0
     )
-    port (
+    port map(
         clk   => clk,
         adr   => wbs_adr,
-        dat_i => wbs_dat,
-        dat_o => wbs_dat,
+        dat_i => wbs_dato,
+        dat_o => wbs_dati,
         sel   => wbs_sel,
         cyc   => wbs_cyc,
         stb   => wbs_stb,

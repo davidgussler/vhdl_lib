@@ -112,8 +112,8 @@ architecture rtl of wb_regs_example is
 
     signal regs_in  : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0);
     signal regs_out : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0);
-    signal rd_stb : std_logic_vector(C_NUM_REGS-1 downto 0);
-    signal wr_stb : std_logic_vector(C_NUM_REGS-1 downto 0);
+    signal rd_pulse : std_logic_vector(C_NUM_REGS-1 downto 0);
+    signal wr_pulse : std_logic_vector(C_NUM_REGS-1 downto 0);
 
     signal r0_b0 : std_logic;
     signal r1_v0 : std_logic_vector(15 downto 0);
@@ -127,7 +127,7 @@ begin
 
     -- Instantiate Register Interface ------------------------------------------
     -- -------------------------------------------------------------------------
-    register_interface : entity work.wbregs(rtl)
+    register_interface : entity work.wb_regs(rtl)
     generic map (
         G_DAT_WIDTH_L2   => C_DAT_WIDTH_L2,
         G_NUM_REGS       => C_NUM_REGS,
@@ -159,8 +159,8 @@ begin
         o_regs => regs_out,
 
         -- Register R/W Interface
-        o_rd_stb => rd_stb,
-        o_wr_stb => wr_stb
+        o_rd_pulse => rd_pulse,
+        o_wr_pulse => wr_pulse
 
     );
 
@@ -183,7 +183,7 @@ begin
     o_out_vec0 <= r4_v0;
     o_out_vec1 <= r5_v0;
 
-    o_rd_pulse <= rd_stb;
-    o_wr_pulse <= wr_stb; 
+    o_rd_pulse <= rd_pulse;
+    o_wr_pulse <= wr_pulse; 
 
 end architecture; 
