@@ -1,22 +1,9 @@
-__pycache__/
-sim_build/
-.Xil
-.pytest_cache/
-
-scratch
-.*.timestamp
 *.jou
 *.log
 *.pb
 *.wdb
 *.str
-xsim.dir
 .Xil
-.gen
-*.dcp
-build
-reports
-
 *.cache
 *.gen
 *.hw
@@ -25,3 +12,4 @@ reports
 *.sim
 
 vunit_out
+trnascript

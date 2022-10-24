@@ -11,7 +11,7 @@
 --            09-23-2022 | 1.0     | Initial 
 -- *****************************************************************************
 -- Description : 
---    Generic Wishbone B4 Pipelined register space
+--    Generic Wishbone B4 Pipelined register bankS
 -- Generics
 -- 
 -- Formula to find minimum for G_NUM_ADR_BITS: clog2(G_NUM_REGS)+G_DAT_WIDTH_LOG2-3
@@ -22,7 +22,11 @@
 -- REG_RESET_VAL will do nothing to RO_REG, only RW_REGS need to be reset 
 -- G_REG_USED_BITS will optomize out unused RW flipflops. Does no optomization
 -- on RO bits (because they arent actually registered)
--- Synthesizer will optomize out unused i_regs and o_regs indexes 
+-- Synthesizer will optomize out unused i_regs and o_regs indexes. Assuming a mix
+-- of RO and RW type regs, not all i_regs, o_regs, o_rd_pulse, and o_wr_pulse signals
+-- will be used due to the nature of how this module is organized. Some synthesizers
+-- and simulators will givve warnings about this but it isn't an issue. 
+
 
 -- assumes little endian accross the board 
 -- assumes all accesses are aligned to G_DAT_WIDTH_LOG2
@@ -114,8 +118,8 @@ begin
 
     -- Register Processes ------------------------------------------------------
     -- -------------------------------------------------------------------------
-    -- Only use flip-flops on used bits. Wire others to 0. 
-    gen_rw_bits_loop : for reg_idx in 0 to G_NUM_REGS-1 generate
+    -- Only use flip-flops on used bits. Hard-wire others to 0. 
+    gen_rw_regs_loop : for reg_idx in 0 to G_NUM_REGS-1 generate
         process (i_clk)
         begin
             if rising_edge(i_clk) then
@@ -129,7 +133,7 @@ begin
             end if;
         end process;
 
-        gen_rw_bits_if : if G_REG_TYPE(reg_idx) = RW_REG generate
+        gen_rw_regs_if : if G_REG_TYPE(reg_idx) = RW_REG generate
             process (i_clk)
             begin
                 if rising_edge(i_clk) then
@@ -143,8 +147,8 @@ begin
                 end if;
             end process;
 
-            gen_rw_bits_loop2 : for bit_idx in 0 to (2 ** G_DAT_WIDTH_L2)-1 generate
-                gen_rw_bits_if2 : if G_REG_USED_BITS(reg_idx)(bit_idx) = '1' generate
+            gen_rw_bits_loop : for bit_idx in 0 to (2 ** G_DAT_WIDTH_L2)-1 generate
+                gen_rw_bits_if : if G_REG_USED_BITS(reg_idx)(bit_idx) = '1' generate
                     prc_regs_out : process (i_clk) begin
                         if (rising_edge(i_clk)) then
                             if (i_rst) then

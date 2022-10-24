@@ -1,4 +1,20 @@
-
+-- #############################################################################
+-- # << Wishbone Register Bank Example >> #
+-- *****************************************************************************
+-- Copyright David N. Gussler 2022
+-- *****************************************************************************
+-- File     : wb_regs_example.vhd
+-- Author   : David Gussler - davidnguss@gmail.com 
+-- Language : VHDL '08
+-- History  :  Date      | Version | Comments 
+--            --------------------------------
+--            10-05-2022 | 1.0     | Initial 
+-- *****************************************************************************
+-- Description : 
+--    Wishbone B4 Pipelined register space example
+--    
+-- #############################################################################
+-- 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -39,7 +55,7 @@ end entity;
 
 architecture rtl of wb_regs_example is
 
-    -- wbregs Constants & Signals ----------------------------------------------
+    -- wb_regs Constants & Signals ----------------------------------------------
     -- =========================================================================
 
     -- Name Register Indexes ---------------------------------------------------
@@ -51,7 +67,7 @@ architecture rtl of wb_regs_example is
     constant REG4_RW : natural := 4;
     constant REG5_RW : natural := 5;
 
-    -- Register Sub-ranges -----------------------------------------------------
+    -- Register Bit-fields -----------------------------------------------------
     -- -------------------------------------------------------------------------
     constant REG0_BIT0 : natural := 0;
     subtype  REG1_VEC0 is natural range 31 downto 16;
@@ -65,8 +81,9 @@ architecture rtl of wb_regs_example is
     constant C_DAT_WIDTH_L2 : positive := 5;
     constant C_NUM_REGS     : positive := 6;
     constant C_NUM_ADR_BITS : positive := 8;
+    constant C_EN_ASSERT : boolean := TRUE;
 
-    constant C_REG_ADR        :
+    constant C_REG_ADR :
         slv_array_t(C_NUM_REGS-1 downto 0)(C_NUM_ADR_BITS-1 downto 0) :=
         (
             REG0_RO => X"00",
@@ -77,7 +94,8 @@ architecture rtl of wb_regs_example is
             REG5_RW => X"14"
         );
 
-    constant C_REG_TYPE       : regtype_array_t(C_NUM_REGS-1 downto 0) :=
+    constant C_REG_TYPE : 
+        regtype_array_t(C_NUM_REGS-1 downto 0) :=
         (
             REG0_RO => RO_REG,
             REG1_RO => RO_REG,
@@ -87,7 +105,7 @@ architecture rtl of wb_regs_example is
             REG5_RW => RW_REG
         );
 
-    constant C_REG_RST_VAL    :
+    constant C_REG_RST_VAL :
         slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0) :=
         (
             REG3_RW => X"0000_0010",
@@ -96,7 +114,7 @@ architecture rtl of wb_regs_example is
             others  => (others=>'0')
         );
 
-    constant C_REG_USED_BITS  :
+    constant C_REG_USED_BITS :
         slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0) :=
         (
             REG0_RO => X"0000_0001",
@@ -107,8 +125,6 @@ architecture rtl of wb_regs_example is
             REG5_RW => X"FFFF_FFFF"
         );
 
-
-    constant C_EN_ASSERT      : boolean := TRUE;
 
     signal regs_in  : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0);
     signal regs_out : slv_array_t(C_NUM_REGS-1 downto 0)((2 ** C_DAT_WIDTH_L2)-1 downto 0);

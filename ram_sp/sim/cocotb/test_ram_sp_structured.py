@@ -18,8 +18,8 @@ from random import getrandbits
 import logging
 import copy
 
-from cocotb_test.simulator import run
-import pytest
+# from cocotb_test.simulator import run
+# import pytest
 
 
 def int_to_blist(input, n_bits):

@@ -5,12 +5,12 @@
 # Top level language 
 TOPLEVEL_LANG ?= vhdl
 # Simulator choice 
-SIM ?= questa
-#SIM ?= ghdl
+#SIM ?= questa
+SIM ?= ghdl
 
 
-# NUmber of samples to feed into the simulation
-export NUM_SAMPLES      ?= 5
+# Number of samples to feed into the simulation
+export NUM_SAMPLES      ?= 500
 
 # Generics 
 export GEN_WIDTH          ?= 16
@@ -21,7 +21,7 @@ export GEN_ALMOST_EMPTY   ?= 2
 
 ifeq ($(TOPLEVEL_LANG),vhdl)
    # Set Sources
-	VHDL_SOURCES += $(PWD)/../../rtl/fifo_sync.vhd
+	VHDL_SOURCES += $(PWD)/../../hdl/fifo_sync.vhd
 
    # Set Generics 
    ifneq ($(filter $(SIM),ghdl questa modelsim riviera activehdl),)

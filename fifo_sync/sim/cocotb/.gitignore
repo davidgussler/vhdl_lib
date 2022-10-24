@@ -1,0 +1,10 @@
+*.ini 
+*.db 
+*.do
+*.vcd 
+*.xml 
+*.data 
+transcript
+__pycache__/ 
+sim_build/
+.pytest_cache

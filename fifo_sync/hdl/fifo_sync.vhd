@@ -31,6 +31,8 @@ entity fifo_sync is
       G_MEM_STYLE    : string  := ""
    );
    port (
+      i_clk   : in std_logic;
+
       -- Write Port
       i_wr           : in  std_logic; 
       i_dat          : in  std_logic_vector(G_WIDTH-1 downto 0); 
@@ -41,9 +43,7 @@ entity fifo_sync is
       i_rd           : in  std_logic; 
       o_dat          : out std_logic_vector(G_WIDTH-1 downto 0); 
       o_almost_empty : out std_logic; 
-      o_empty        : out std_logic; 
-
-      i_clk   : in std_logic
+      o_empty        : out std_logic
    );
 end entity;
 

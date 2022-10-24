@@ -1,8 +1,13 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+
 entity debounce is
    generic (
       N_CLKS : integer := 100; -- number of clocks to wait before declairing the input as stable
-      ACT_LVL : std_logic := '1'; -- 1 for active high 
-   )
+      ACT_LVL : std_logic := '1' -- 1 for active high 
+   );
    port (
       i_clk   : in std_logic;
       i_srst  : in std_logic;

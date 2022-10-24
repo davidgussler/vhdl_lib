@@ -20,7 +20,6 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use std.textio.all;
 
-use work.mem_utils_pkg.all;
 use work.gen_utils_pkg.all;
 
 entity test_ram_sp_tb is
@@ -30,9 +29,7 @@ entity test_ram_sp_tb is
       G_DEPTH      : positive := 1024;
       G_RD_LATENCY : natural range 0 to 16 := 1; 
       G_MEM_STYLE  : string  := "auto";
-      G_INIT_TYPE  : string  := "mem_init"; 
-      G_FILE_NAME  : string  := "mem_init.txt"; -- provide absolute path!
-      G_MEM_INIT   : t_vector_array(G_DEPTH-1 downto 0)(G_DAT_N_COL*G_DAT_COL_W-1 downto 0) := 
+      G_MEM_INIT   : slv_array_t(G_DEPTH-1 downto 0)(G_DAT_N_COL*G_DAT_COL_W-1 downto 0) := 
          (others=>(others=>'0'));
       G_EN_ASSERT  : boolean := TRUE
    );

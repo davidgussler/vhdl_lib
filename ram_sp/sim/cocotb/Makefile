@@ -8,7 +8,7 @@ TOPLEVEL_LANG ?= vhdl
 SIM ?= ghdl#questa
 
 # Generics 
-export NUM_SAMPLES        ?= 5
+export NUM_SAMPLES        ?= 5000
 export GENERIC_DAT_N_COL  ?= 4
 export GENERIC_DAT_COL_W  ?= 8
 export GENERIC_DEPTH      ?= 2
@@ -17,9 +17,8 @@ export GENERIC_RD_LATENCY ?= 1
 
 ifeq ($(TOPLEVEL_LANG),vhdl)
    # Set Sources
-	VHDL_SOURCES += $(PWD)/../../../../gen_logic/gen_utils_pkg.vhd
-	VHDL_SOURCES += $(PWD)/../../../mem_utils_pkg.vhd
-	VHDL_SOURCES += $(PWD)/../../rtl/ram_sp.vhd
+	VHDL_SOURCES += $(PWD)/../../../utils/gen_utils_pkg.vhd
+	VHDL_SOURCES += $(PWD)/../../hdl/ram_sp.vhd
    VHDL_SOURCES += $(PWD)/test_ram_sp_tb.vhd
 
    # Set Generics 

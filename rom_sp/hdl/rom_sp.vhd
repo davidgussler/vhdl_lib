@@ -91,18 +91,16 @@ use work.gen_utils_pkg.all;
 
 entity rom_sp is 
    generic(
-      DAT_W     : integer range 1 to 64 := 32;
-      DEPTH     : integer := 1024;
-      SYNC_RD   : boolean := TRUE;
-      OUT_REG   : boolean := FALSE;
-      MEM_STYLE : string  := "";
-      INIT_TYPE : string  := ""; 
-      FILE_NAME : string  := "mem_init.txt";
-      MEM_INIT  : t_vector_array(DEPTH-1 downto 0)(DAT_W-1 downto 0) := (others=>(others=>'0'))
+      G_DAT_W     : integer range 1 to 64 := 32;
+      G_DEPTH     : integer := 1024;
+      G_SYNC_RD   : boolean := TRUE;
+      G_OUT_REG   : boolean := FALSE;
+      G_MEM_STYLE : string  := "";
+      G_MEM_INIT  : slv_array_t(DEPTH-1 downto 0)(DAT_W-1 downto 0) := (others=>(others=>'0'))
    );
    port(
       i_en  : in std_logic;
-      i_adr : in std_logic_vector(ceil_log2(DEPTH)-1 downto 0);
+      i_adr : in std_logic_vector(clog2(DEPTH)-1 downto 0);
       o_dat : out std_logic_vector(DAT_W-1 downto 0);
 
       i_clk : in std_logic
@@ -110,24 +108,24 @@ entity rom_sp is
 end rom_sp;
 
 architecture rtl of rom_sp is 
-   signal w_dat, w2_dat : std_logic_vector(DAT_W-1 downto 0); 
-   signal r_dat, r2_dat : std_logic_vector(DAT_W-1 downto 0) := (others=>'0');
+   signal w_dat, w2_dat : std_logic_vector(G_DAT_W-1 downto 0); 
+   signal r_dat, r2_dat : std_logic_vector(G_DAT_W-1 downto 0) := (others=>'0');
 
-   signal rom : t_vector_array(DEPTH-1 downto 0)(DAT_W-1 downto 0) := init_mem(INIT_TYPE, FILE_NAME, MEM_INIT, DEPTH, DAT_W);
+   signal rom : slv_array_t(DEPTH-1 downto 0)(DAT_W-1 downto 0) := G_MEM_INIT;
 
    -- --------------------------------------------------------------------------------------------
    -- Synthesis Attributes
    -- --------------------------------------------------------------------------------------------  
    -- Viavado 
    attribute rom_style :  string;
-   attribute rom_style of rom : signal is MEM_STYLE;
+   attribute rom_style of rom : signal is G_MEM_STYLE;
 
 begin
    -- Error Checking 
-   assert (not (SYNC_RD=FALSE and OUT_REG=FALSE) and (MEM_STYLE="block" or MEM_STYLE="ultra")) 
+   assert (not (G_SYNC_RD=FALSE and G_OUT_REG=FALSE) and (G_MEM_STYLE="block" or G_MEM_STYLE="ultra")) 
       report "Not able to instantiate device specific memory primitive. SYNC_RD and/or OUT_REG must be set to TRUE." 
       severity warning; 
-   assert (not (to_integer(unsigned(i_adr)) > DEPTH))
+   assert (not (to_integer(unsigned(i_adr)) > G_DEPTH))
       report "Tried to access an address that doesn't exist (this could happen if DEPTH is not a power of 2 and an address larger than DEPTH was used)."
       severity warning; 
 
@@ -137,14 +135,14 @@ begin
    -- --------------------------------------------------------------------------------------------
    -- Asynchronous Reads
    -- --------------------------------------------------------------------------------------------
-   gen_async_read : if (SYNC_RD = FALSE) generate 
+   gen_async_read : if (G_SYNC_RD = FALSE) generate 
       w_dat <= rom(to_integer(unsigned(i_adr))); 
    end generate;
 
    -- --------------------------------------------------------------------------------------------
    -- Synchronous Reads
    -- --------------------------------------------------------------------------------------------
-   gen_sync_read : if (SYNC_RD = TRUE) generate 
+   gen_sync_read : if (G_SYNC_RD = TRUE) generate 
       proc_sync_read: process (i_clk)
       begin
          if rising_edge(i_clk) then 
@@ -159,7 +157,7 @@ begin
    -- --------------------------------------------------------------------------------------------
    -- Optional Output Register
    -- --------------------------------------------------------------------------------------------
-   gen_out_reg : if (OUT_REG = TRUE) generate 
+   gen_out_reg : if (G_OUT_REG = TRUE) generate 
       proc_sync_read: process (i_clk)
       begin
          if rising_edge(i_clk) then 
@@ -171,7 +169,7 @@ begin
       w2_dat <= r2_dat; 
    end generate;
 
-   gen_no_out_reg : if (OUT_REG = FALSE) generate 
+   gen_no_out_reg : if (G_OUT_REG = FALSE) generate 
       w2_dat <= w_dat; 
    end generate;
 

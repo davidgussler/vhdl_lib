@@ -73,20 +73,20 @@ entity ram_sp is
       G_DAT_COL_W  : integer range 1 to 64 := 8;
       G_DEPTH      : positive := 1024;
       G_RD_LATENCY : natural range 0 to 16 := 1; 
-      G_MEM_STYLE  : string  := "auto";
+      G_MEM_STYLE  : string  := "";
       G_MEM_INIT   : slv_array_t(G_DEPTH-1 downto 0)
          (G_DAT_N_COL*G_DAT_COL_W-1 downto 0) := (others=>(others=>'0'));
       G_EN_ASSERT  : boolean := TRUE
    );
    port(
+      i_clk : in std_logic;
+
       i_en  : in std_logic;
       i_we  : in std_logic_vector(G_DAT_N_COL-1 downto 0);
       i_adr : in std_logic_vector(clog2(G_DEPTH)-1 downto 0);
       i_dat : in std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
-      o_dat : out std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0);
-
-      i_clk : in std_logic
-      );
+      o_dat : out std_logic_vector(G_DAT_N_COL*G_DAT_COL_W-1 downto 0)
+   );
 end ram_sp;
 
 architecture rtl of ram_sp is 

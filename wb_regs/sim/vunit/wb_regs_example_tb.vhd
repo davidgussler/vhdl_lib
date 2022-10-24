@@ -1,5 +1,5 @@
 -- ###############################################################################################
--- # << Skid Buffer Testbench >> #
+-- # << Wishbone Register Bank Testbench >> #
 -- *********************************************************************************************** 
 -- Copyright David N. Gussler 2022
 -- *********************************************************************************************** 
@@ -11,11 +11,8 @@
 --            10-01-2022 | 1.0     | Initial 
 -- *********************************************************************************************** 
 -- Description : 
---    Basic testbench for the skid buffer module
---    Makes use of the Vunit verification framework
---    After trying cocotb and vunit, I've decided that I like vunit much better
---       Everything "just works" and the project feels more mature
---       The BFMs are a huge draw.
+--   Testing out the VUnit Wishbone master BFM
+--   
 -- ###############################################################################################
 
 -- Libraries -------------------------------------------------------------------
@@ -87,8 +84,6 @@ architecture tb of wb_regs_example_tb is
         byte_length => 8,
         logger => get_logger("wishbone_bus")
     );
-
-
     
 
 begin
@@ -135,13 +130,13 @@ begin
         done <= false;
         wait until rising_edge(clk);
         
-        info("Writing '0xFEED_DADA' to address '0x04'");
-        write_bus(net, bus_master, X"04", X"FEED_DADA", X"F");
+        info("Writing '0xFEED_DADA' to address '0x14'");
+        write_bus(net, bus_master, X"14", X"FEED_DADA", X"F");
         info("Write complete!");
         info("Waiting 10 clockcycles");
         wait for 10 * C_CLK_PERIOD;
         info("Initiating a read");
-        read_bus(net, bus_master, X"04", rdata_bref);
+        read_bus(net, bus_master, X"14", rdata_bref);
         info("Waiting on ack");
         --await_read_bus_reply(net, rdata_bref, rdata_data);
         info("Received ack from slave!");

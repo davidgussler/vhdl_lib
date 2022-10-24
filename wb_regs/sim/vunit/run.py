@@ -1,28 +1,41 @@
+#!/usr/bin/python3
 ################################################################################
 # File: run.py
 # Description: Configures the VUnit test runner
 ################################################################################
 
 from vunit import VUnit
+from os.path import exists
 
-# Create VUnit instance by parsing command line arguments
+# Create VUNit instance from arguments
 vu = VUnit.from_argv()
 
-# Add Verification Components Library
 vu.add_verification_components()
 
-# Add OSVVM Library
 vu.add_osvvm()
 
-# Create library 'lib'
 lib = vu.add_library("lib")
 
-# Add source files to lib
+# Add design src files
 lib.add_source_files("../../hdl/*.vhd")
 lib.add_source_files("../../../utils/gen_utils_pkg.vhd")
-
-# Add testbench files to lib
 lib.add_source_files("*.vhd")
+#lib.add_source_files_from_csv("csv_path")
+
+# Set top level generics
+#lib.set_generic("g_name", "800")
+
+# Dont optomize away unused signals... we want full visibility while debugging
+lib.set_sim_option("modelsim.vsim_flags", ["voptargs=+acc"])
+
+# Add the wave file to the design if it exists
+# If this option is uncommented, then Enable Coverage will not run. 
+# if exists("./wave.do"):
+#     lib.set_sim_option("modelsim.vsim_flags", ["-do ./../../wave.do"])
+
+# Enable Coverage
+lib.set_compile_option("modelsim.vcom_flags", ["+cover=sbceft"])
+lib.set_sim_option("modelsim.vsim_flags", ["-coverage"])
 
 # Run vunit function
 vu.main()
