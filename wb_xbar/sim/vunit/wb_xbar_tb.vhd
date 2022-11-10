@@ -179,9 +179,7 @@ begin
         wait for 10 * C_CLK_PERIOD;
         info("Reading...");
         read_bus(net, wbm0, X"1000", rdata_bref);
-        -- info("Waiting on ack");
-        -- --await_read_bus_reply(net, rdata_bref, rdata_data);
-        -- info("Received ack from slave!");
+        info("Read Complete!");
         
         wait until rising_edge(clk);
         done <= true;
@@ -197,44 +195,44 @@ begin
     -- DUT ---------------------------------------------------------------------
     -- -------------------------------------------------------------------------
     u_dut : entity work.wb_xbar
-        generic map (
-            G_NM            => C_NM            ,
-            G_NS            => C_NS            ,
-            G_DAT_W_L2      => C_DAT_W_L2      ,
-            G_ADR_W         => C_ADR_W         ,
-            G_S_BASE_ADR    => C_S_BASE_ADR    ,
-            G_S_ADR_W       => C_S_ADR_W       ,
-            G_MAX_OUTSTAND  => C_MAX_OUTSTAND  ,
-            G_WATCHDOG_CLKS => C_WATCHDOG_CLKS ,
-            G_CONN_MATRIX   => C_CONN_MATRIX   ,
-            G_ROUND_ROBIN   => C_ROUND_ROBIN
-        )
-        port map (
-            i_clk => clk,
-            i_rst => rst,
-    
-            i_wbs_cyc => i_wbs_cyc,
-            i_wbs_stb => i_wbs_stb,
-            i_wbs_adr => i_wbs_adr,
-            i_wbs_wen => i_wbs_wen,
-            i_wbs_sel => i_wbs_sel,
-            i_wbs_dat => i_wbs_dat,
-            o_wbs_stl => o_wbs_stl,
-            o_wbs_ack => o_wbs_ack,
-            o_wbs_err => o_wbs_err,
-            o_wbs_dat => o_wbs_dat,
+    generic map (
+        G_NM            => C_NM            ,
+        G_NS            => C_NS            ,
+        G_DAT_W_L2      => C_DAT_W_L2      ,
+        G_ADR_W         => C_ADR_W         ,
+        G_S_BASE_ADR    => C_S_BASE_ADR    ,
+        G_S_ADR_W       => C_S_ADR_W       ,
+        G_MAX_OUTSTAND  => C_MAX_OUTSTAND  ,
+        G_WATCHDOG_CLKS => C_WATCHDOG_CLKS ,
+        G_CONN_MATRIX   => C_CONN_MATRIX   ,
+        G_ROUND_ROBIN   => C_ROUND_ROBIN
+    )
+    port map (
+        i_clk => clk,
+        i_rst => rst,
 
-            o_wbm_cyc => o_wbm_cyc,
-            o_wbm_stb => o_wbm_stb,
-            o_wbm_adr => o_wbm_adr,
-            o_wbm_wen => o_wbm_wen,
-            o_wbm_sel => o_wbm_sel,
-            o_wbm_dat => o_wbm_dat,
-            i_wbm_stl => i_wbm_stl,
-            i_wbm_ack => i_wbm_ack,
-            i_wbm_err => i_wbm_err,
-            i_wbm_dat => i_wbm_dat
-        );
+        i_wbs_cyc => i_wbs_cyc,
+        i_wbs_stb => i_wbs_stb,
+        i_wbs_adr => i_wbs_adr,
+        i_wbs_wen => i_wbs_wen,
+        i_wbs_sel => i_wbs_sel,
+        i_wbs_dat => i_wbs_dat,
+        o_wbs_stl => o_wbs_stl,
+        o_wbs_ack => o_wbs_ack,
+        o_wbs_err => o_wbs_err,
+        o_wbs_dat => o_wbs_dat,
+
+        o_wbm_cyc => o_wbm_cyc,
+        o_wbm_stb => o_wbm_stb,
+        o_wbm_adr => o_wbm_adr,
+        o_wbm_wen => o_wbm_wen,
+        o_wbm_sel => o_wbm_sel,
+        o_wbm_dat => o_wbm_dat,
+        i_wbm_stl => i_wbm_stl,
+        i_wbm_ack => i_wbm_ack,
+        i_wbm_err => i_wbm_err,
+        i_wbm_dat => i_wbm_dat
+    );
 
 
 

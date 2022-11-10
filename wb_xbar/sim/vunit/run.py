@@ -39,7 +39,7 @@ lib.add_source_files("*.vhd")
 
 
 # Don't optomize away unused signals... we want full visibility while debugging
-#lib.set_sim_option("modelsim.vsim_flags", ["voptargs=+acc"])
+lib.set_sim_option("modelsim.vsim_flags", ["voptargs=+acc"])
 
 # Add the wave file to the design if it exists
 # If this option is uncommented, then Enable Coverage will not run. 
