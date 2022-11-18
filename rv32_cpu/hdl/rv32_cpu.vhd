@@ -19,7 +19,7 @@ use work.rv32_pkg.all;
 
 entity rv32_cpu is
     generic (
-        HART_ID    : natural;
+        HART_ID    : std_logic_vector(31 downto 0) := x"0000_0000";
         RESET_ADDR : std_logic_vector(31 downto 0) := x"0000_0000";
         TRAP_ADDR  : std_logic_vector(31 downto 0) := x"1C09_0000"
     );
@@ -47,15 +47,16 @@ entity rv32_cpu is
         i_dstall    : in  std_logic;
         i_derror    : in  std_logic;
 
-        -- CPU Control
-        o_sleep     : out std_logic; -- cpu is in sleep mode when set
-        o_debug     : out std_logic; -- cpu is in debug mode when set
-        i_db_halt   : in  std_logic; -- debugger requests a halt 
-
         -- Interrupts
-        i_msw_irq   : in  std_logic; -- machine software interrupt
-        i_mext_irq  : in  std_logic; -- machine external interrupt
-        i_mtime_irq : in  std_logic  -- machine timer interrupt
+        i_msi_irq   : in  std_logic; 
+        i_mei_irq   : in  std_logic; 
+        i_mti_irq   : in  std_logic; 
+
+        -- Other
+        o_sleep     : out std_logic;
+        o_debug     : out std_logic;
+        i_db_halt   : in  std_logic;
+        i_mtime     : in  std_logic_vector(31 downto 0)
 
     );
 end entity;
@@ -72,6 +73,7 @@ architecture rtl of rv32_cpu is
    signal wrb : wrb_t;
 
 begin
+    -- =========================================================================
     -- Fetch ===================================================================
     -- =========================================================================
     
@@ -85,7 +87,7 @@ begin
                 if haz.pc_stall then
                     fet.pc <= fet.pc; 
                 elsif trap then
-                    fet.pc <= TRAP_ADDR;
+                    fet.pc <= TRAP_ADDR(31 downto 2) & b"00";
                 elsif dec.br_taken then
                     fet.pc <= dec.brt_adr; 
                 else 
@@ -94,14 +96,17 @@ begin
             end if;
         end if; 
     end process;
-
-    fet.instr_adr_misaligned <= '1' when fet.pc(0) = '1' or fet.pc(1) = '1' else '0';
-
+    
     fet.pc4 <= std_logic_vector(unsigned(fet.pc) + 4);  
+    
+    fet.instr_adr_ma_excpt <= fet.pc(0) or fet.pc(1);
+    dec.instr_access_excpt <= i_ierror; 
 
-    o_iren <= '1'; 
-    o_iaddr <= fet.pc;
-    dec.instr   <= i_irdat;
+    o_iren    <= '1'; 
+    o_iaddr   <= fet.pc;
+    dec.instr <= i_irdat;
+    o_ifence  <= '0'; -- TODO: 
+    -- i_istall; 
 
 
     -- Fetch => Decode registers
@@ -117,7 +122,7 @@ begin
         end if;
     end process;
 
-
+    -- =========================================================================
     -- Decode ==================================================================
     -- =========================================================================
     dec.opcode   <= dec.instr(RANGE_OPCODE);
@@ -200,8 +205,8 @@ begin
             dec.imm32(11)           <= dec.instr(RANGE_IMM_J_11);
             dec.imm32(10 downto 1)  <= dec.instr(RANGE_IMM_J_10_1);
             dec.imm32(0)            <= '0';
-
-        when others  => 
+        
+        when others  => -- ITYPE
             dec.imm32(31 downto 12) <= (others=>dec.instr(31));
             dec.imm32(11 downto 0)  <= dec.instr(RANGE_IMM_I);
 
@@ -213,7 +218,7 @@ begin
     -- branches and jumps. Jumps (JAL, JALR) will always be taken 
     -- Adding the extra hardware to resolve branch in this stage rather than
     -- alu stage to save a stall cycle on mispredicted branches. Using a simple
-    -- predict not taken protocal. 
+    -- predict not taken scheme. 
     ap_branch_resolution : process(all)
         variable v_brt_adr : std_logic_vector(31 downto 0);
     begin
@@ -263,6 +268,7 @@ begin
                 exe.funct3   <= dec.funct3;
                 exe.pc4      <= dec.pc4; 
                 ece.rdst_adr <= dec.rdst_adr;
+                exe.imm32    <= dec.imm32; 
             end if;
         end if;
     end process;
@@ -270,7 +276,7 @@ begin
 
 
 
-
+    -- =========================================================================
     -- Execute =================================================================
     -- =========================================================================
     
@@ -323,23 +329,178 @@ begin
 
     -- CSRs --------------------------------------------------------------------
     -- -------------------------------------------------------------------------
-    sp_csr : process (i_clk)
+    -- Generate the csr write data 
+    ap_csr_wdata : process (all)
+    begin
+
+        case exe.funct3 is 
+            when F3_CSRRW =>  
+                exe.csr_wdata <= exe.rs1_dat;
+
+            when F3_CSRRS =>
+                exe.csr_wdata <= exe.rs1_dat or exe.csr_rdata;
+
+            when F3_CSRRC =>
+                exe.csr_wdata <= not exe.rs1_dat and exe.csr_rdata;
+
+            when F3_CSRRWI =>  
+                exe.csr_wdata(31 downto 5) <= (others=>'0');
+                exe.csr_wdata(4 downto 0)  <= exe.rs1_adr;
+
+            when F3_CSRRSI =>
+                exe.csr_wdata(31 downto 5) <= exe.csr_rdata(31 downto 5);
+                exe.csr_wdata(4 downto 0)  <= exe.rs1_adr or exe.csr_rdata(4 downto 0);
+
+            when F3_CSRRCI =>
+                exe.csr_wdata(31 downto 5) <= (others=>'0');
+                exe.csr_wdata(4 downto 0)  <= not exe.rs1_adr and exe.csr_rdata(4 downto 0);
+
+            when others   => 
+                exe.csr_wdata <= (others=>'-');
+        end case; 
+    end process;
+
+
+    -- Write Access 
+    sp_csr_wr : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if csr_write then
-                case csr_adr is
+            if i_rst then
+                exe.csr.mstatus <= (others=>'-');
+
+            -- Software writes by CSR instructions
+            elsif exe.ctrl.sys then
+                case exe.imm32(11 downto 0) is
+                    when CSR_FFLAGS  =>
+                    when CSR_FRM     =>
+                    when CSR_FCSR    =>
+
                     when CSR_MSTATUS =>
-                        csr.mstatus <= csr_wr_dat;
+                        exe.csr.mstatus(MIE)  <= exe.csr_wdata(MIE); 
+                    
+                    when CSR_MIE =>
+                        exe.csr.mie(MSI) <= exe.csr_wdata(MSI); 
+                        exe.csr.mie(MTI) <= exe.csr_wdata(MTI); 
+                        exe.csr.mie(MEI) <= exe.csr_wdata(MEI); 
+                    
+                    when CSR_MCYCLE =>
+                        exe.csr.mcycle   <= exe.csr_wdata; 
                         
-                
+                    when CSR_MINSTRET =>
+                        exe.csr.minstret <= exe.csr_wdata; 
+
+                    when CSR_MCOUNTINHIBIT => 
+                        exe.csr.mcountinhibit(CY) <= exe.csr_wdata(CY);
+                        exe.csr.mcountinhibit(IR) <= exe.csr_wdata(IR);
+
                     when others =>
                         null;
-                end case;
+                end case;    
+
+            -- Hardware writes by CPU
+            else 
+                
+                exe.csr.mtime <= ; 
+
+                --exe.csr.fflags      <= ; TODO: add these with FP extension 
+                --exe.csr.frm         <= ; TODO: add these with FP extension 
+                --exe.csr.fcsr        <= ; TODO: add these with FP extension 
+                --exe.csr.mstatus(FS) <= ; TODO: add these with FP extension 
+                --exe.csr.mstatus(SD) <= ; TODO: add these with FP extension
+                
+                exe.csr.mstatus(MPIE) <= ;
+                
+                exe.csr.mip(MSI) <=
+                exe.csr.mip(MTI) <=
+                exe.csr.mip(MEI) <=
+
+                exe.csr.mcycle   <= 
+                exe.csr.minstret <=
+
+                exe.csr.mepc(1 downto 0)  <= b"00";
+                exe.csr.mepc(31 downto 2) <= ;
+
+                exe.csr.mcause(INTR) <= 
+                exe.csr.mcause(CODE) <= 
+
+                if then
+                    
+
+                elsif  then
+                
+                else 
+                
+                end if;
             end if; 
         end if;
     end process;
 
 
+    -- Read Access
+    ap_csr_rd : process(all)
+    begin 
+
+        exe.csr_rdata <= (others=>'0'); -- default
+
+        if exe.ctrl.sys then
+            case exe.imm32(11 downto 0) is
+                
+                --when CSR_FFLAGS  => exe.csr_rdata <= exe.csr.fflags; TODO: add these with FP extension
+                --when CSR_FRM     => exe.csr_rdata <= exe.csr.frm   ; TODO: add these with FP extension
+                --when CSR_FCSR    => exe.csr_rdata <= exe.csr.fcsr  ; TODO: add these with FP extension
+
+                when CSR_TIME =>
+                    exe.csr_rdata <= exe.csr.mtime; 
+            
+                when CSR_MHARTID =>
+                    exe.csr_rdata  <= HART_ID;
+
+                when CSR_MSTATUS =>
+                    exe.csr_rdata(MIE)  <= exe.csr.mstatus(MIE) ;
+                    exe.csr_rdata(MPIE) <= exe.csr.mstatus(MPIE);
+                    --exe.csr_rdata(FS)   <= exe.csr.mstatus(FS)  ; TODO: add these with FP extension
+                    --exe.csr_rdata(SD)   <= exe.csr.mstatus(SD)  ; TODO: add these with FP extension
+                
+                when CSR_MTVEC =>
+                    exe.csr_rdata(MODE) <= b"00"; -- Direct mode - All exceptions set PC to BASE
+                    exe.csr_rdata(BASE) <= TRAP_ADDR(31 downto 2); 
+
+                when CSR_MIE =>
+                    exe.csr_rdata(MSI) <= exe.csr.mie(MSI); 
+                    exe.csr_rdata(MTI) <= exe.csr.mie(MTI); 
+                    exe.csr_rdata(MEI) <= exe.csr.mie(MEI); 
+
+                when CSR_MIP =>
+                    exe.csr_rdata(MSI) <= exe.csr.mip(MSI); 
+                    exe.csr_rdata(MTI) <= exe.csr.mip(MTI); 
+                    exe.csr_rdata(MEI) <= exe.csr.mip(MEI); 
+
+                when CSR_MCYCLE | CSR_CYCLE =>
+                    exe.csr_rdata <= exe.csr.mcycle; 
+
+                when CSR_MINSTRET | CSR_INSTRET =>
+                    exe.csr_rdata <= exe.csr.minstret; 
+                
+                when CSR_MCOUNTINHIBIT => 
+                    exe.csr_rdata(CY) <= exe.csr.mcountinhibit(CY); 
+                    exe.csr_rdata(IR) <= exe.csr.mcountinhibit(IR);
+
+                when CSR_MEPC =>
+                    exe.csr_rdata(1 downto 0)  <= b"00";
+                    exe.csr_rdata(31 downto 2) <= exe.csr.mepc(31 downto 2);
+
+                when CSR_MCAUSE =>
+                    exe.csr_rdata(INTR) => exe.csr.mcause(INTR);
+                    exe.csr_rdata(CODE) => exe.csr.mcause(CODE);
+
+                when others =>
+                    null;
+            end case;
+        end if;
+    end process; 
+
+    -- Select between the ALU and CSRs for data to feed to next stage
+    exe.exe_rslt <= exe.csr_rdata when exe.ctrl.sys else exe.alu_rslt; 
 
 
     
@@ -351,7 +512,7 @@ begin
             
             else 
                 mem.ctrl     <= exe.ctrl; 
-                mem.alu_rslt <= exe.alu_rslt;
+                mem.exe_rslt <= exe.exe_rslt;
                 mem.rs2_dat  <= exe.rs2_dat;
                 mem.funct3   <= exe.funct3; 
                 mem.pc4      <= exe.pc4; 
@@ -361,24 +522,21 @@ begin
     end process;
 
 
-
+    -- =========================================================================
     -- Memory ==================================================================
     -- =========================================================================
-    
-    mem.misaligned_daddr <= '1' when o_daddr(1) = '1' or o_daddr(0) = '1' else '0';
-
+    -- 
     o_dren <= mem.ctrl.mem_rd;  
     o_dwen <= mem.ctrl.mem_wr;       
-       
-    o_daddr <= mem.alu_rslt; 
-      
+    o_daddr <= mem.exe_rslt; 
     o_dwdat <= mem.rs2_dat; 
+    
+    mem.data_ma_adr_excpt <= o_daddr(1) or o_daddr(0);
+    wrb.data_access_excpt <= i_derror;
 
-    --o_dfence 
+    o_dfence <= '0'; -- TODO:  
     --i_dstall   
-    --i_derror   
 
-      
 
     -- Loads
     ap_data_load : process (all)
@@ -421,6 +579,7 @@ begin
     end process;
 
 
+
     -- Memory => Writeback registers
     sp_mem_wrb_regs : process (i_clk)
     begin
@@ -429,7 +588,7 @@ begin
             
             else 
                 wrb.ctrl     <= mem.ctrl; 
-                wrb.alu_rslt <= mem.alu_rslt;
+                wrb.exe_rslt <= mem.exe_rslt;
                 wrb.pc4      <= mem.pc4; 
                 wrb.rdst_adr <= mem.rdst_adr;
             end if;
@@ -437,27 +596,43 @@ begin
     end process;
 
 
-
+    -- =========================================================================
     -- Writeback ===============================================================
     -- =========================================================================
     ap_wrb_mux : process (all) 
     begin
         case (wrb.ctrl.wrb_sel) is 
-            when WRB_SEL_EXE_RESULT => wrb.rdst_dat <= wb.exe_rslt;
-            when WRB_SEL_MEM        => wrb.rdst_dat <= wb.memrd_dat;
-            when WRB_SEL_PC4        => wrb.rdst_dat <= wb.pc4; 
+            when WRB_SEL_EXE_RESULT => wrb.rdst_dat <= wrb.exe_rslt;
+            when WRB_SEL_MEM        => wrb.rdst_dat <= wrb.memrd_dat;
+            when WRB_SEL_PC4        => wrb.rdst_dat <= wrb.pc4; 
             when others             => wrb.rdst_dat <= (others=>'-');
         end case; 
     end process; 
 
 
 
-    -- TODO: execptions, CSRs, hazards (stalls), forwarding 
+    -- TODO: execptions & wfi, CSRs, hazards (stalls) & forwarding 
     -- TODO: once I have the cpu implemented and tested, experiment with different
     -- architecture decisions to try to speed things up (for example synchronous
     -- register file reads / branch resolution in exe)
 
+
+
+    -- =========================================================================
+    -- Hazard Unit =============================================================
+    -- =========================================================================
     
+
+    -- =========================================================================
+    -- Performance Counters ====================================================
+    -- =========================================================================
+    
+
+
+
+
+
+
 
 end architecture;
 

@@ -187,7 +187,7 @@ begin
             o_ctrl.jal      <= '0';
             o_ctrl.jalr     <= '0';
             o_ctrl.branch   <= '0';
-            o_ctrl.imm_type <= b"---"; 
+            o_ctrl.imm_type <= ITYPE; 
             o_ctrl.exe_unit <= b"--"; 
             o_ctrl.sys      <= '1';
   
@@ -204,6 +204,7 @@ begin
             o_ctrl.branch   <= '0';
             o_ctrl.imm_type <= b"---"; 
             o_ctrl.exe_unit <= b"--"; 
+            o_ctrl.illegal  <= '1'; 
         end case; 
     end process;
 end architecture rtl; 

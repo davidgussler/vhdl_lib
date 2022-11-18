@@ -22,9 +22,10 @@ use work.gen_utils_pkg.all;
 
 
 package rv32_pkg is 
-   
-    -- Instruction Decoding -------------------------------------------------------------------------
-    -- ----------------------------------------------------------------------------------------------
+    -- =========================================================================
+    -- Instruction Decoding ====================================================
+    -- =========================================================================
+
     -- Core
     subtype RANGE_OPCODE  is natural range 6  downto 0;
     subtype RANGE_RD      is natural range 11 downto 7;
@@ -53,8 +54,8 @@ package rv32_pkg is
     subtype  RANGE_IMM_J_10_1  is natural range 30  downto 21;
     
  
-    -- Opcodes --------------------------------------------------------------------------------------
-    -- ----------------------------------------------------------------------------------------------
+    -- Opcodes -----------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     -- Integer ALU
     constant OPCODE_LUI    : std_logic_vector(6 downto 0) := "0110111";
     constant OPCODE_AUIPC  : std_logic_vector(6 downto 0) := "0010111";
@@ -82,12 +83,13 @@ package rv32_pkg is
     --
     -- Floating Point - not implementing this yet 
     constant OPCODE_FOP    : std_logic_vector(6 downto 0) := "1010011";
-    
-    -- Funct3 ---------------------------------------------------------------------------------------
-    -- ----------------------------------------------------------------------------------------------
+
+
+    -- Funct3 ------------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     -- OPCODE_JALR
-    constant F3_JALR     : std_logic_vector(2 downto 0) := "000"; -- jump and link register
- 
+    constant F3_JALR   : std_logic_vector(2 downto 0) := "000"; -- jump and link register
+    --
     -- OPCODE_BRANCH
     constant F3_BEQ    : std_logic_vector(2 downto 0) := "000"; -- branch if equal
     constant F3_BNE    : std_logic_vector(2 downto 0) := "001"; -- branch if not equal
@@ -108,7 +110,7 @@ package rv32_pkg is
     constant F3_SH     : std_logic_vector(2 downto 0) := "001"; -- store half word
     constant F3_SW     : std_logic_vector(2 downto 0) := "010"; -- store word
     --
-    -- OPCODE_ALUI and OPCODE_ALUR
+    -- OPCODE_ALUI & OPCODE_ALUR
     constant F3_SUBADD : std_logic_vector(2 downto 0) := "000"; -- sub/add via funct7
     constant F3_SLL    : std_logic_vector(2 downto 0) := "001"; -- shift logical left
     constant F3_SLT    : std_logic_vector(2 downto 0) := "010"; -- set on less than
@@ -118,7 +120,7 @@ package rv32_pkg is
     constant F3_OR     : std_logic_vector(2 downto 0) := "110"; -- or
     constant F3_AND    : std_logic_vector(2 downto 0) := "111"; -- and
     --
-    -- OPCODE_SYSTEM --
+    -- OPCODE_SYSTEM
     constant F3_ENV    : std_logic_vector(2 downto 0) := "000"; -- ecall, ebreak, mret, wfi, ... (via imm12)
     constant F3_CSRRW  : std_logic_vector(2 downto 0) := "001"; -- csr r/w
     constant F3_CSRRS  : std_logic_vector(2 downto 0) := "010"; -- csr read & set bit
@@ -131,35 +133,36 @@ package rv32_pkg is
     constant F3_FENCE  : std_logic_vector(2 downto 0) := "000"; -- RV32I - fence - order IO/memory access (->NOP)
     constant F3_FENCEI : std_logic_vector(2 downto 0) := "001"; -- Zifencei --fencei - instruction stream sync
  
+    -- TODO: here ...
+    -- Funct12 -----------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- OPCODE_SYSTEM: F3_ENV
+    constant F12_ECALL  : std_logic_vector(11 downto 0) := x"000"; -- ECALL
+    constant F12_EBREAK : std_logic_vector(11 downto 0) := x"001"; -- EBREAK
+    constant F12_MRET   : std_logic_vector(11 downto 0) := x"302"; -- MRET   trap retire 
+    constant F12_WFI    : std_logic_vector(11 downto 0) := x"105"; -- WFI    wait for interrupt (go to sleep)
+    -- 
+    -- OPCODE_JALR
+    constant F12_JALR : std_logic_vector(11 downto 0) := x"000"; 
  
-    -- TODO: Here downto ...
-    -- Immediate i-type -------------------------------------------------
-    -- -------------------------------------------------------------------------------------------
-    -- system F3_ENV --
-    constant IMM_I_ECALL  : std_logic_vector(11 downto 0) := x"000"; -- ECALL
-    constant IMM_I_EBREAK : std_logic_vector(11 downto 0) := x"001"; -- EBREAK
-    constant IMM_I_MRET   : std_logic_vector(11 downto 0) := x"302"; -- MRET  idk this one 
-    constant IMM_I_WFI    : std_logic_vector(11 downto 0) := x"105"; -- WFI   idk this one 
-    constant IMM_I_DRET   : std_logic_vector(11 downto 0) := x"7b2"; -- DRET  idk this one
-    -- OPCODE_JALR - 
-    constant IMM_I_JALR : std_logic_vector(11 downto 0) := x"000"; -- ECALL
- 
-    -- Funct7  ----------------------------------------------------------------------------
-    -- -------------------------------------------------------------------------------------------
+
+    -- Funct7  -----------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     constant F7_ZERO : std_logic_vector(6 downto 0) := "0000000"; -- shift right / left logical and add
     constant F7_32   : std_logic_vector(6 downto 0) := "0100000"; -- shift right arithmetic and sub
     constant F7_ONE  : std_logic_vector(6 downto 0) := "0000001"; -- multiply extention 
  
  
- 
-    -- Funct5 --------------------------------------------------------------------------
-    -- -------------------------------------------------------------------------------------------
-    -- atomic operations  OPCODE_ATOMIC --
+    -- Funct5 ------------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- OPCODE_ATOMIC
     constant F5_A_LR : std_logic_vector(4 downto 0) := "00010"; -- LR
     constant F5_A_SC : std_logic_vector(4 downto 0) := "00011"; -- SC
     -- ... TODO: here
     
-    -- ALU OPCODES
+
+    -- Integer ALU Opcodes -----------------------------------------------------
+    -- -------------------------------------------------------------------------
     constant ALUOP_ADD  : std_logic_vector(3 downto 0) := '0' & F3_SUBADD ;
     constant ALUOP_SUB  : std_logic_vector(3 downto 0) := '1' & F3_SUBADD ;
     constant ALUOP_SLL  : std_logic_vector(3 downto 0) := '0' & F3_SLL    ;
@@ -171,15 +174,20 @@ package rv32_pkg is
     constant ALUOP_OR   : std_logic_vector(3 downto 0) := '0' & F3_OR     ;
     constant ALUOP_AND  : std_logic_vector(3 downto 0) := '0' & F3_AND    ;
  
- 
+
+
     
-    -- RISC-V standard CSR addresses --------------------------------------------
-    -- --------------------------------------------------------------------------
+    -- =========================================================================
+    -- CSRs ====================================================================
+    -- =========================================================================
+
+    -- Addresses ---------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     -- Unprivileged Floating-Point CSRs (URW)
     constant CSR_FFLAGS   : std_logic_vector(11 downto 0) := X"001"; -- Floating-Point Accrued Exceptions
     constant CSR_FRM      : std_logic_vector(11 downto 0) := X"002"; -- Floating-Point Dynamic Rounding Mode
     constant CSR_FCSR     : std_logic_vector(11 downto 0) := X"003"; -- Floating-Point Control and Status Register (frm + fflags).
- 
+    --
     -- Unprivileged Counters/Timers (URO)
     constant CSR_CYCLE    : std_logic_vector(11 downto 0) := X"C00"; -- Cycle counter for RDCYCLE instruction
     constant CSR_TIME     : std_logic_vector(11 downto 0) := X"C01"; -- Timer for RDTIME instruction
@@ -187,14 +195,14 @@ package rv32_pkg is
     constant CSR_CYCLEH   : std_logic_vector(11 downto 0) := X"C80"; -- Upper 32 bits of cycle; RV32 only
     constant CSR_TIMEH    : std_logic_vector(11 downto 0) := X"C81"; -- Upper 32 bits of time; RV32 only
     constant CSR_INSTRETH : std_logic_vector(11 downto 0) := X"C82"; -- Upper 32 bits of instret; RV32 only
- 
+    --
     -- Machine Information Registers (MRO)
     constant CSR_MVENDID      : std_logic_vector(11 downto 0) := X"F11"; -- Vendor ID
     constant CSR_MARCHID      : std_logic_vector(11 downto 0) := X"F12"; -- Architecture ID
     constant CSR_MIMPID       : std_logic_vector(11 downto 0) := X"F13"; -- Implementation ID
     constant CSR_MHARTID      : std_logic_vector(11 downto 0) := X"F14"; -- Hart (Hardware execution thread) ID
     constant CSR_MCONFIGPTR   : std_logic_vector(11 downto 0) := X"F15"; -- Pointer to configuration data structure
- 
+    --
     -- Machine Trap Setup (MRW)
     constant CSR_MSTATUS      : std_logic_vector(11 downto 0) := X"300"; -- Machine status register
     constant CSR_MISA         : std_logic_vector(11 downto 0) := X"301"; -- ISA and extensions
@@ -204,7 +212,7 @@ package rv32_pkg is
     constant CSR_MTVEC        : std_logic_vector(11 downto 0) := X"305"; -- Machine trap handler base address 
     constant CSR_MCOUNTEREN   : std_logic_vector(11 downto 0) := X"306"; -- Machine counter enable
     constant CSR_MSTATUSH     : std_logic_vector(11 downto 0) := X"310"; -- Upper 32 bits of mstatus; RV32 only
- 
+    --
     -- Machine Trap Handling (MRW)
     constant CSR_MSCRATCH     : std_logic_vector(11 downto 0) := X"340"; -- Scratch register for machine trap handlers
     constant CSR_MEPC         : std_logic_vector(11 downto 0) := X"341"; -- Machine exception program counter 
@@ -213,42 +221,55 @@ package rv32_pkg is
     constant CSR_MIP          : std_logic_vector(11 downto 0) := X"344"; -- Machine interrupt pending
     constant CSR_MTINST       : std_logic_vector(11 downto 0) := X"34A"; -- Machine bad trap instruction (transformed)
     constant CSR_MTVAL2       : std_logic_vector(11 downto 0) := X"34B"; -- Machine bad guest physical address 
- 
+    --
     -- Machine Configuration (MRW)
     constant CSR_MENVCFG      : std_logic_vector(11 downto 0) := X"30A"; -- Machine environment configuration register
     constant CSR_MENVCFGH     : std_logic_vector(11 downto 0) := X"31A"; -- Upper 32 bits of menvcfg; RV32 only 
     constant CSR_MSECCFG      : std_logic_vector(11 downto 0) := X"747"; -- Machine security configuration register 
     constant CSR_MSECCFGH     : std_logic_vector(11 downto 0) := X"757"; -- Upper 32 bits of mseccfg; RV32 only 
- 
+    --
     -- Machine Memory Protection
     -- Unused (for now)
-    
+    --
     -- Machine Counters/Timers (MRW)
     constant CSR_MCYCLE    : std_logic_vector(11 downto 0) := X"B00"; -- Machine cycle counter
     constant CSR_MINSTRET  : std_logic_vector(11 downto 0) := X"B02"; -- Machine instructions-retired counter
     constant CSR_MCYCLEH   : std_logic_vector(11 downto 0) := X"B80"; -- Upper 32 bits of mcycle; RV32 only
     constant CSR_MINSTRETH : std_logic_vector(11 downto 0) := X"B82"; -- Upper 32 bits of minstret; RV32 only
- 
+    --
     -- Machine Counter Setup (MRW)
-    -- Unused (for now)
-    
+    constant CSR_MCOUNTINHIBIT : std_logic_vector(11 downto 0) := X"320";
+    --
     -- Debug/Trace Registers (Shared with Debug Mode) (MRW)
     constant CSR_TSELECT       : std_logic_vector(11 downto 0) := X"7A0"; -- Debug/Trace register select
     constant CSR_TDATA1        : std_logic_vector(11 downto 0) := X"7A1"; -- First Debug/Trace triger data register
     constant CSR_TDATA2        : std_logic_vector(11 downto 0) := X"7A2"; -- Second Debug/Trace triger data register
     constant CSR_TDATA3        : std_logic_vector(11 downto 0) := X"7A3"; -- Third Debug/Trace triger data register
     constant CSR_MCONTEXT      : std_logic_vector(11 downto 0) := X"7A8"; -- Machine-mode context register
- 
+    --
     -- Debug Mode Registers (DRW)
     constant CSR_DCSR          : std_logic_vector(11 downto 0) := X"7B0"; -- Debug control and status register
     constant CSR_DPC           : std_logic_vector(11 downto 0) := X"7B1"; -- Debug PC (program counter)
     constant CSR_DSCRATCH0     : std_logic_vector(11 downto 0) := X"7B2"; -- Debug scratch register 0
     constant CSR_DSCRATCH1     : std_logic_vector(11 downto 0) := X"7B3"; -- Debug scratch register 1
  
- 
- 
- 
- 
+
+    -- Fields ------------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- CSR_MSTATUS
+    constant MIE  : natural    := 3; 
+    constant MPIE : natural    := 7; 
+    subtype  FS  is natural range 14 downto 13;
+    constant SD   : natural    := 31; 
+    --
+    -- CSR_MIE & CSR_MIP
+    constant MSI  : natural    := 3; 
+    constant MTI  : natural    := 7; 
+    constant MEI  : natural    := 11;
+    --
+    -- CSR_MCOUNTINHIBIT
+    subtype  CY  : natural    := 0;  
+    constant IR  : natural    := 2;  
     
     -- control signals
     type ctrl_t is record      
@@ -264,6 +285,9 @@ package rv32_pkg is
         alu_b    : std_logic; -- register, immediate
         jal      : std_logic; 
         imm_type : std_logic_vector(2 downto 0);
+        fence    : std_logic; 
+        sys      : std_logic;
+        illegal  : std_logic; 
     end record;
  
     -- pipeline phases
@@ -386,7 +410,7 @@ package rv32_pkg is
     constant MEM_TO_ID_FW    : std_logic_vector(1 downto 0) := "10";
     constant MEM_WB_TO_ID_FW : std_logic_vector(1 downto 0) := "11";
  
-    -- EXE Forwarding mux select signals 
+    -- EXE Forwarding mux select signals  
     constant EX_TO_EX_FW      : std_logic_vector(1 downto 0) := "00";
     constant WB_TO_EX_FW      : std_logic_vector(1 downto 0) := "01";
     constant MEM_TO_EX_FW     : std_logic_vector(1 downto 0) := "10";
@@ -396,7 +420,7 @@ package rv32_pkg is
     constant MEM_TO_MEM_FW : std_logic := '0';
     constant WB_TO_MEM_FW  : std_logic := '1';
  
- 
+
  
     type t_instr_decode is (
         -- RV32I --
