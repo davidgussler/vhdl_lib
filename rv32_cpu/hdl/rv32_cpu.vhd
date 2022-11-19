@@ -74,15 +74,14 @@ architecture rtl of rv32_cpu is
 
 begin
     -- =========================================================================
-    -- Fetch ===================================================================
+    -- Fetch Stage =============================================================
     -- =========================================================================
-    
     -- PC
     sp_pc : process (i_clk) 
     begin
         if (rising_edge(i_clk)) then
             if i_rst then
-                fet.pc <= RESET_ADDR;
+                fet.pc <= RESET_ADDR(31 downto 2) & b"00";
             else 
                 if haz.pc_stall then
                     fet.pc <= fet.pc; 
@@ -109,21 +108,28 @@ begin
     -- i_istall; 
 
 
-    -- Fetch => Decode registers
+
+    -- =========================================================================
+    -- Fetch/Decode Registers ==================================================
+    -- =========================================================================
     sp_fet_dec_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst) then
+            if (i_rst or haz.dec_flush) then
             
             else 
-                dec.pc  <= fet.pc; 
-                dec.pc4 <= fet.pc4;
-            end if;
+                if (haz.dec_stall) then
+                
+                else 
+                    dec.pc  <= fet.pc; 
+                    dec.pc4 <= fet.pc4;
+                end if;
+            end if; 
         end if;
     end process;
 
     -- =========================================================================
-    -- Decode ==================================================================
+    -- Decode Stage ============================================================
     -- =========================================================================
     dec.opcode   <= dec.instr(RANGE_OPCODE);
     dec.rs1_adr  <= dec.instr(RANGE_RS1);
@@ -181,34 +187,34 @@ begin
     ap_imm32 : process (all) 
     begin
         case (dec.ctrl.imm_type) is
-        when (STYPE) => 
-            dec.imm32(31 downto 12) <= (others=>dec.instr(31));
-            dec.imm32(11 downto 5)  <= dec.instr(RANGE_IMM_S_11_5);
-            dec.imm32(4 downto 0)   <= dec.instr(RANGE_IMM_S_4_0);
+            when (STYPE) => 
+                dec.imm32(31 downto 12) <= (others=>dec.instr(31));
+                dec.imm32(11 downto 5)  <= dec.instr(RANGE_IMM_S_11_5);
+                dec.imm32(4 downto 0)   <= dec.instr(RANGE_IMM_S_4_0);
 
-        when (BTYPE) => 
-            dec.imm32(31 downto 13) <= (others=>dec.instr(31));
-            dec.imm32(12)           <= dec.instr(RANGE_IMM_B_12);
-            dec.imm32(11)           <= dec.instr(RANGE_IMM_B_11);
-            dec.imm32(10 downto 5)  <= dec.instr(RANGE_IMM_B_10_5);
-            dec.imm32(4 downto 1)   <= dec.instr(RANGE_IMM_B_4_1);
-            dec.imm32(0)            <= '0';
+            when (BTYPE) => 
+                dec.imm32(31 downto 13) <= (others=>dec.instr(31));
+                dec.imm32(12)           <= dec.instr(RANGE_IMM_B_12);
+                dec.imm32(11)           <= dec.instr(RANGE_IMM_B_11);
+                dec.imm32(10 downto 5)  <= dec.instr(RANGE_IMM_B_10_5);
+                dec.imm32(4 downto 1)   <= dec.instr(RANGE_IMM_B_4_1);
+                dec.imm32(0)            <= '0';
 
-        when (UTYPE) => 
-            dec.imm32(31 downto 12) <= dec.instr(RANGE_IMM_U);
-            dec.imm32(11 downto 0)  <= X"000";
+            when (UTYPE) => 
+                dec.imm32(31 downto 12) <= dec.instr(RANGE_IMM_U);
+                dec.imm32(11 downto 0)  <= X"000";
 
-        when (JTYPE) => 
-            dec.imm32(31 downto 21) <= (others=>dec.instr(31));
-            dec.imm32(20)           <= dec.instr(RANGE_IMM_J_20);
-            dec.imm32(19 downto 12) <= dec.instr(RANGE_IMM_J_19_12);
-            dec.imm32(11)           <= dec.instr(RANGE_IMM_J_11);
-            dec.imm32(10 downto 1)  <= dec.instr(RANGE_IMM_J_10_1);
-            dec.imm32(0)            <= '0';
-        
-        when others  => -- ITYPE
-            dec.imm32(31 downto 12) <= (others=>dec.instr(31));
-            dec.imm32(11 downto 0)  <= dec.instr(RANGE_IMM_I);
+            when (JTYPE) => 
+                dec.imm32(31 downto 21) <= (others=>dec.instr(31));
+                dec.imm32(20)           <= dec.instr(RANGE_IMM_J_20);
+                dec.imm32(19 downto 12) <= dec.instr(RANGE_IMM_J_19_12);
+                dec.imm32(11)           <= dec.instr(RANGE_IMM_J_11);
+                dec.imm32(10 downto 1)  <= dec.instr(RANGE_IMM_J_10_1);
+                dec.imm32(0)            <= '0';
+            
+            when others  => -- ITYPE
+                dec.imm32(31 downto 12) <= (others=>dec.instr(31));
+                dec.imm32(11 downto 0)  <= dec.instr(RANGE_IMM_I);
 
        end case; 
     end process; 
@@ -254,32 +260,35 @@ begin
     end process;
 
 
-
-    -- Decode => Execute registers
+    -- =========================================================================
+    -- Decode/Execute Registers ================================================
+    -- =========================================================================
     sp_dec_exe_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst) then
+            if (i_rst or haz.exe_flush) then
             
             else 
-                exe.ctrl     <= dec.ctrl; 
-                exe.rs1_dat  <= dec.rs1_dat;
-                exe.rs2_dat  <= dec.rs2_dat;
-                exe.funct3   <= dec.funct3;
-                exe.pc4      <= dec.pc4; 
-                ece.rdst_adr <= dec.rdst_adr;
-                exe.imm32    <= dec.imm32; 
-            end if;
+                if (haz.exe_stall) then
+                
+                else 
+                    exe.ctrl     <= dec.ctrl; 
+                    exe.rs1_dat  <= dec.rs1_dat;
+                    exe.rs2_dat  <= dec.rs2_dat;
+                    exe.rs1_adr  <= dec.rs1_adr;
+                    exe.rs2_adr  <= dec.rs2_adr;
+                    exe.rdst_adr <= dec.rdst_adr;
+                    exe.funct3   <= dec.funct3;
+                    exe.pc4      <= dec.pc4; 
+                    exe.imm32    <= dec.imm32; 
+                end if;
+            end if; 
         end if;
     end process;
 
-
-
-
     -- =========================================================================
-    -- Execute =================================================================
+    -- Execute Stage ===========================================================
     -- =========================================================================
-    
     -- Generate the aluop
     ap_alu_ctrl : process (all)
     begin
@@ -400,7 +409,7 @@ begin
             -- Hardware writes by CPU
             else 
                 
-                exe.csr.mtime <= ; 
+                
 
                 --exe.csr.fflags      <= ; TODO: add these with FP extension 
                 --exe.csr.frm         <= ; TODO: add these with FP extension 
@@ -414,6 +423,7 @@ begin
                 exe.csr.mip(MTI) <=
                 exe.csr.mip(MEI) <=
 
+                exe.csr.mtime    <= 
                 exe.csr.mcycle   <= 
                 exe.csr.minstret <=
 
@@ -504,28 +514,35 @@ begin
 
 
     
-    -- Execute => Memory registers
+    -- 
+    -- =========================================================================
+    -- Execute/Memory Registers ================================================
+    -- =========================================================================
     sp_exe_mem_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst) then
+            if (i_rst or haz.mem_flush) then
             
             else 
-                mem.ctrl     <= exe.ctrl; 
-                mem.exe_rslt <= exe.exe_rslt;
-                mem.rs2_dat  <= exe.rs2_dat;
-                mem.funct3   <= exe.funct3; 
-                mem.pc4      <= exe.pc4; 
-                mem.rdst_adr <= exe.rdst_adr; 
-            end if;
+                if (haz.mem_stall) then
+                
+                else 
+                    mem.ctrl     <= exe.ctrl; 
+                    mem.exe_rslt <= exe.exe_rslt;
+                    mem.rs2_dat  <= exe.rs2_dat;
+                    mem.rs2_adr  <= exe.rs2_adr;
+                    mem.funct3   <= exe.funct3; 
+                    mem.pc4      <= exe.pc4; 
+                    mem.rdst_adr <= exe.rdst_adr; 
+                end if;
+            end if; 
         end if;
     end process;
 
 
     -- =========================================================================
-    -- Memory ==================================================================
+    -- Memory Stage ============================================================
     -- =========================================================================
-    -- 
     o_dren <= mem.ctrl.mem_rd;  
     o_dwen <= mem.ctrl.mem_wr;       
     o_daddr <= mem.exe_rslt; 
@@ -579,25 +596,30 @@ begin
     end process;
 
 
-
-    -- Memory => Writeback registers
+    -- =========================================================================
+    -- Memory/Writeback Registers ==============================================
+    -- =========================================================================
     sp_mem_wrb_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst) then
+            if (i_rst or haz.wrb_flush) then
             
             else 
-                wrb.ctrl     <= mem.ctrl; 
-                wrb.exe_rslt <= mem.exe_rslt;
-                wrb.pc4      <= mem.pc4; 
-                wrb.rdst_adr <= mem.rdst_adr;
-            end if;
+                if (haz.wrb_stall) then
+                
+                else 
+                    wrb.ctrl     <= mem.ctrl; 
+                    wrb.exe_rslt <= mem.exe_rslt;
+                    wrb.pc4      <= mem.pc4; 
+                    wrb.rdst_adr <= mem.rdst_adr;
+                end if;
+            end if; 
         end if;
     end process;
 
 
     -- =========================================================================
-    -- Writeback ===============================================================
+    -- Writeback Stage =========================================================
     -- =========================================================================
     ap_wrb_mux : process (all) 
     begin
@@ -621,7 +643,172 @@ begin
     -- =========================================================================
     -- Hazard Unit =============================================================
     -- =========================================================================
+    -- Detects and resolves pipeline hazards by forwarding where possible and 
+    -- stalling otherwise
     
+    -- Forwarding --------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- TODO: think about forwarding due to not having a write thru register file 
+    -- I actually think I may have solved this by forwarding from wrb to decode???
+    -- Needs to be thought about deeply.. Pretty sure its good, but dbl check my thinking in the morning
+
+    -- Stages closest to target stage take priority because they have the most recent value 
+    -- All of these are "data hazards"
+    ap_forwarding : process (all)
+    begin
+        -- Forwarding to decode stage
+        -- should only need to forward to decode stage if it is a branch or jalr instruction 
+        -- TODO: add logic to check for branch in decode stage (I think )
+        -- Can I forward regardless of it being a branch? 
+        -- RS1
+        --if    (exe.ctrl.reg_wr = '1' and exe.rdst_adr /= b"00000" and exe.rdst_adr = dec.rs1_adr) then
+        --    haz.dec_rs1_fw_sel <= EXE_FW;
+        elsif (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs1_adr) then
+            haz.dec_rs1_fw_sel <= MEM_FW;
+        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = dec.rs1_adr) then
+            haz.dec_rs1_fw_sel <= WRB_FW;
+        else 
+            haz.dec_rs1_fw_sel <= NO_FW;
+        end if; 
+        -- RS2
+        --if    (exe.ctrl.reg_wr = '1' and exe.rdst_adr /= b"00000" and exe.rdst_adr = dec.rs2_adr) then
+        --    haz.dec_rs2_fw_sel <= EXE_FW;
+        elsif (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs2_adr) then
+            haz.dec_rs2_fw_sel <= MEM_FW;
+        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = dec.rs2_adr) then
+            haz.dec_rs2_fw_sel <= WRB_FW;
+        else 
+            haz.dec_rs2_fw_sel <= NO_FW;
+        end if; 
+
+        -- TODO: can I get rid of some of this???
+        -- -- Forwarding to execute stage
+        -- -- RS1
+        if    (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = exe.rs1_adr) then
+            haz.exe_rs1_fw_sel <= MEM_FW;
+        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = exe.rs1_adr) then
+            haz.exe_rs1_fw_sel <= WRB_FW;
+        else 
+            haz.exe_rs1_fw_sel <= NO_FW;
+        end if; 
+        -- RS2
+        if    (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = exe.rs2_adr) then
+            haz.exe_rs2_fw_sel <= MEM_FW;
+        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = exe.rs2_adr) then
+            haz.exe_rs2_fw_sel <= WRB_FW;
+        else 
+            haz.exe_rs2_fw_sel <= NO_FW;
+        end if; 
+
+        -- Forwarding to memory stage
+        -- Should only need to forward if there is a load (ie mem.ctrl.mem_rd), but not checking this 
+        -- and forwarding regardless doesnt hurt anything. might as well leave this check out 
+        -- to save a small ammount of logic
+        -- RS1 is not needed in the memory stage
+        -- RS2
+        if    (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = mem.rs2_adr) then
+            haz.mem_rs2_fw_sel <= WRB_FW;
+        else 
+            haz.mem_rs2_fw_sel <= NO_FW;
+        end if; 
+
+    end process;
+
+
+
+    -- Stalling ----------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+
+    -- Load Hazard - if load is in mem while dependent instruction is in an earlier stage, 
+    -- stall the pipe till load is in wrb and can be forwarded to the earlier stage
+    -- This is a "data hazard" that is not solvable by pure forwarding
+    -- Dont need to check mem.ctrl.reg_wr because we know that is already 1 if mem.ctrl.mem_rd is 1
+    ld_hazard <= '1' when   mem.ctrl.mem_rd = '1' 
+                      and   mem.rdst_adr /= b"00000"
+                      and ((mem.rdst_adr = exe.rs1_adr or mem.rdst_adr = exe.rs2_adr) 
+                       or  (mem.rdst_adr = dec.rs1_adr or mem.rdst_adr = dec.rs2_adr)) 
+                else '0'; 
+
+
+
+    -- Branch Hazards - AKA control hazards 
+    -- if branch is in ID while ld is in EX or MEM wait till ld gets to WB
+    -- The following 2 commented out cases should get handled by standard br and jalr hazards
+    --br_ld_ex_hazard  <= '1' when id_ctrl.branch = '1' and ex.mem_rd = '1' and ex.rdest /= "00000" and (ex.rdest = id_rs1 or ex.rdest = id_rs2) else '0'; 
+    --jalr_ld_ex_hazard  <= '1' when id_ctrl.branch = '1' and ex.mem_rd = '1' and ex.rdest /= "00000" and ex.rdest = id_rs1 else '0'; 
+    br_ld_mem_hazard <= '1' when id_ctrl.branch = '1' and mem.mem_rd = '1' and mem.rdest /= "00000" and (mem.rdest = id_rs1 or mem.rdest = id_rs2) else '0'; 
+    jalr_ld_mem_hazard <= '1' when id_ctrl.branch = '1' and mem.mem_rd = '1' and mem.rdest /= "00000" and mem.rdest = id_rs1 else '0'; 
+
+    -- if branch is in ID while add,etc is in EX, wait till add,etc is in MEM
+    br_hazard <= '1' when id_ctrl.branch = '1' and ex.reg_wr = '1' and ex.rdest /= "00000" and (ex.rdest = id_rs1 or ex.rdest = id_rs2) else '0';
+    jalr_hazard <= '1' when id_ctrl.jalr = '1' and ex.reg_wr = '1' and ex.rdest /= "00000" and (ex.rdest = id_rs1) else '0';  
+
+    -- exception hazards -- TODO: 
+
+
+    ap_stalls : process (all)
+    begin
+        if (ld_hazard = '1') then   -- stall at dec, bubble at exe
+            haz.pc_stall  <= '1'; 
+            haz.dec_stall <= '1';
+            haz.exe_stall <= '0';
+            haz.mem_stall <= '0';
+            haz.wrb_stall <= '0';
+
+            haz.dec_flush <= '0';
+            haz.exe_flush <= '1'; 
+            haz.mem_flush <= '0';
+            haz.wrb_flush <= '0';
+
+        elsif (br_hazard = '1' or jalr_hazard = '1') then -- stall at decode, bubble at execute
+            hz.pc_stall    <= '1'; 
+
+            hz.ifid_stall  <= '1';
+            hz.idex_stall  <= '0';
+            hz.exmem_stall <= '0';
+            hz.memwb_stall <= '0';
+
+            hz.ifid_flush  <= '0';
+            hz.idex_flush  <= '1'; 
+            hz.exmem_flush <= '0';
+            hz.memwb_flush <= '0';
+        elsif (br_ld_mem_hazard = '1' or jalr_ld_mem_hazard = '1') then -- stall at decode, bubble at mem
+            hz.pc_stall    <= '1'; 
+
+            hz.ifid_stall  <= '1';
+            hz.idex_stall  <= '0';
+            hz.exmem_stall <= '0';
+            hz.memwb_stall <= '0';
+
+            hz.ifid_flush  <= '0';
+            hz.idex_flush  <= '0'; 
+            hz.exmem_flush <= '1';
+            hz.memwb_flush <= '0';
+        else 
+            hz.pc_stall    <= '0'; 
+
+            hz.ifid_stall  <= '0';
+            hz.idex_stall  <= '0';
+            hz.exmem_stall <= '0';
+            hz.memwb_stall <= '0';
+
+            hz.ifid_flush  <= '0';
+            hz.idex_flush  <= '0'; 
+            hz.exmem_flush <= '0';
+            hz.memwb_flush <= '0';
+        end if; 
+    end process;
+
+
+
+
+
+
+
+
+
+
+
 
     -- =========================================================================
     -- Performance Counters ====================================================
