@@ -21,7 +21,8 @@ entity rv32_cpu is
     generic (
         HART_ID    : std_logic_vector(31 downto 0) := x"0000_0000";
         RESET_ADDR : std_logic_vector(31 downto 0) := x"0000_0000";
-        TRAP_ADDR  : std_logic_vector(31 downto 0) := x"1C09_0000"
+        TRAP_ADDR  : std_logic_vector(31 downto 0) := x"1C09_0000";
+        MTIME_ADDR : std_logic_Vector(31 downto 0) := x"0C09_0000"
     );
     port (
         -- Clock & Reset
@@ -48,24 +49,24 @@ entity rv32_cpu is
         i_derror    : in  std_logic;
 
         -- Interrupts
-        i_msi_irq   : in  std_logic; 
-        i_mei_irq   : in  std_logic; 
-        i_mti_irq   : in  std_logic; 
+        i_ms_irq   : in  std_logic; 
+        i_me_irq   : in  std_logic; 
+        i_mt_irq   : in  std_logic; 
 
         -- Other
         o_sleep     : out std_logic;
         o_debug     : out std_logic;
-        i_db_halt   : in  std_logic;
-        i_mtime     : in  std_logic_vector(31 downto 0)
+        i_db_halt   : in  std_logic
 
     );
 end entity;
 
 
 architecture rtl of rv32_cpu is
-   -- pipeline phases
-   -- signals associated with a phase can either come from the pipeline register
-   -- before that phase or be set combinationally within that pahse
+
+   -- Pipeline phase signals
+   -- Signals associated with a phase can either come from the pipeline register
+   -- before that phase or be set combinationally within that pahse.
    signal fet : fet_t; 
    signal dec : dec_t; 
    signal exe : exe_t;
@@ -76,37 +77,83 @@ begin
     -- =========================================================================
     -- Fetch Stage =============================================================
     -- =========================================================================
-    -- PC
+    
+    -- Handle Interrupts & Exceptions ------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- Delay the interrupt pending bits by 1 so we can detect a rising edge 
+    -- NOTE: The mem.csr.mip bits are tied directly to the i_mX_irq input signals
+    process (i_clk)
+    begin
+        if (rising_edge(i_clk)) then
+            if (i_rst) then
+                fet.dly_mip_msi <= '0';
+                fet.dly_mip_mti <= '0';
+                fet.dly_mip_mei <= '0';
+            else
+                fet.dly_mip_msi <= mem.csr.mip(MSI);
+                fet.dly_mip_mti <= mem.csr.mip(MTI);
+                fet.dly_mip_mei <= mem.csr.mip(MEI);
+            end if;
+        end if;
+    end process;
+
+    -- Set the PC to the trap address for an interrupt if:
+    -- 1.  Interrupts are enabled globally 
+    -- 2.  The specific interrupt is enabled
+    -- 3a. The specific interrupt has gone from not pending to pending -OR-
+    -- 3b. The specific interrupt is still pending after returning from the last 
+    --     interrupt service routine (but in most cases this probably shouldnt
+    --     happen because we would expect the ISR to do something to clear the 
+    --     pending interrupt)
+    -- NOTE: This does not handle nested interrupts. For example, if mt_irq_pulse goes high, 
+    -- the flow jumps to the trap addr, the isr starts, and then mt_irq_pulse goes high again, 
+    -- the the flow will jump to the trap addr again, even if we haven't gotten an mret
+    -- instruciton. In practice this shouldn't be an issue (assuming the NVIC external to the 
+    -- cpu is designed well)
+    fet.ms_irq_pulse <= (mem.csr.mip(MSI) and (not fet.dly_mip_msi or dec.mret)) and mem.csr.mie(MSI) and mem.csr.mstatus(MIE); 
+    fet.mt_irq_pulse <= (mem.csr.mip(MTI) and (not fet.dly_mip_mti or dec.mret)) and mem.csr.mie(MTI) and mem.csr.mstatus(MIE); 
+    fet.me_irq_pulse <= (mem.csr.mip(MEI) and (not fet.dly_mip_mei or dec.mret)) and mem.csr.mie(MEI) and mem.csr.mstatus(MIE); 
+
+    
+    -- All Exceptions and Interrupts
+    fet.trap_taken <= ms_irq_pulse or mt_irq_pulse or me_irq_pulse or 
+            mem.load_ma_adr_excpt or mem.load_access_excpt or 
+            mem.store_ma_adr_excpt or mem.store_access_excpt or 
+            dec.illegal_instr or dec.ecall_except or dec.ebreak_except or 
+            fet.instr_adr_ma_excpt or fet.instr_access_excpt; 
+
+
+
+    -- Program Counter ---------------------------------------------------------
+    -- -------------------------------------------------------------------------
     sp_pc : process (i_clk) 
     begin
         if (rising_edge(i_clk)) then
-            if i_rst then
+            if (i_rst) then
                 fet.pc <= RESET_ADDR(31 downto 2) & b"00";
             else 
-                if haz.pc_stall then
+                if (not haz.pc_enable) then
                     fet.pc <= fet.pc; 
-                elsif trap then
+                elsif (dec.mret) then
+                    fet.pc <= mem.csr.epc;
+                elsif (fet.trap_taken) then -- Must have higher priority than branch 
                     fet.pc <= TRAP_ADDR(31 downto 2) & b"00";
-                elsif dec.br_taken then
+                elsif (dec.br_taken) then
                     fet.pc <= dec.brt_adr; 
                 else 
-                    fet.pc <= fet.pc4;
+                    fet.pc <= std_logic_vector(unsigned(fet.pc) + 4);  
                 end if;
             end if;
         end if; 
     end process;
     
-    fet.pc4 <= std_logic_vector(unsigned(fet.pc) + 4);  
-    
     fet.instr_adr_ma_excpt <= fet.pc(0) or fet.pc(1);
-    dec.instr_access_excpt <= i_ierror; 
+    fet.instr_access_excpt <= i_ierror; 
 
     o_iren    <= '1'; 
     o_iaddr   <= fet.pc;
     dec.instr <= i_irdat;
     o_ifence  <= '0'; -- TODO: 
-    -- i_istall; 
-
 
 
     -- =========================================================================
@@ -117,14 +164,12 @@ begin
         if rising_edge(i_clk) then
             if (i_rst or haz.dec_flush) then
             
-            else 
-                if (haz.dec_stall) then
-                
-                else 
-                    dec.pc  <= fet.pc; 
-                    dec.pc4 <= fet.pc4;
-                end if;
-            end if; 
+            elsif (haz.dec_enable) then
+                dec.pc           <= fet.pc; 
+                dec.ms_irq_pulse <= fet.ms_irq_pulse;
+                dec.mt_irq_pulse <= fet.mt_irq_pulse;
+                dec.me_irq_pulse <= fet.me_irq_pulse;
+            end if;
         end if;
     end process;
 
@@ -260,6 +305,32 @@ begin
     end process;
 
 
+    -- System Instructions -----------------------------------------------------
+    -- -------------------------------------------------------------------------
+    ap_system : process (all)
+    begin
+        dec.ecall_excpt <= '0'; 
+        dec.ecall_excpt <= '0'; 
+        dec.mret        <= '0';
+        dec.wfi         <= '0';
+        dec.csr_access  <= '0'; 
+
+        if (dec.ctrl.sys) then
+            if (dec.funct3 = F3_ENV) then
+                case (dec.imm32(11 downto 0)) is 
+                    when F12_ECALL  => dec.ecall_excpt <= '1'; 
+                    when F12_EBREAK => dec.ebreak_excpt <= '1'; 
+                    when F12_MRET   => dec.mret        <= '1';
+                    when F12_WFI    => dec.wfi         <= '1';
+                    when others     => null;
+                end case; 
+            else 
+                dec.csr_access <= '1'; 
+            end if;
+        end if; 
+    end process;
+
+
     -- =========================================================================
     -- Decode/Execute Registers ================================================
     -- =========================================================================
@@ -268,20 +339,18 @@ begin
         if rising_edge(i_clk) then
             if (i_rst or haz.exe_flush) then
             
-            else 
-                if (haz.exe_stall) then
-                
-                else 
-                    exe.ctrl     <= dec.ctrl; 
-                    exe.rs1_dat  <= dec.rs1_dat;
-                    exe.rs2_dat  <= dec.rs2_dat;
-                    exe.rs1_adr  <= dec.rs1_adr;
-                    exe.rs2_adr  <= dec.rs2_adr;
-                    exe.rdst_adr <= dec.rdst_adr;
-                    exe.funct3   <= dec.funct3;
-                    exe.pc4      <= dec.pc4; 
-                    exe.imm32    <= dec.imm32; 
-                end if;
+
+            elsif (haz.exe_enable) then
+                exe.ctrl     <= dec.ctrl; 
+                exe.rs1_dat  <= dec.rs1_dat;
+                exe.rs2_dat  <= dec.rs2_dat;
+                exe.rs1_adr  <= dec.rs1_adr;
+                exe.rs2_adr  <= dec.rs2_adr;
+                exe.rdst_adr <= dec.rdst_adr;
+                exe.funct3   <= dec.funct3;
+                exe.pc       <= dec.pc; 
+                exe.imm32    <= dec.imm32; 
+
             end if; 
         end if;
     end process;
@@ -336,185 +405,7 @@ begin
     end process; 
 
 
-    -- CSRs --------------------------------------------------------------------
-    -- -------------------------------------------------------------------------
-    -- Generate the csr write data 
-    ap_csr_wdata : process (all)
-    begin
-
-        case exe.funct3 is 
-            when F3_CSRRW =>  
-                exe.csr_wdata <= exe.rs1_dat;
-
-            when F3_CSRRS =>
-                exe.csr_wdata <= exe.rs1_dat or exe.csr_rdata;
-
-            when F3_CSRRC =>
-                exe.csr_wdata <= not exe.rs1_dat and exe.csr_rdata;
-
-            when F3_CSRRWI =>  
-                exe.csr_wdata(31 downto 5) <= (others=>'0');
-                exe.csr_wdata(4 downto 0)  <= exe.rs1_adr;
-
-            when F3_CSRRSI =>
-                exe.csr_wdata(31 downto 5) <= exe.csr_rdata(31 downto 5);
-                exe.csr_wdata(4 downto 0)  <= exe.rs1_adr or exe.csr_rdata(4 downto 0);
-
-            when F3_CSRRCI =>
-                exe.csr_wdata(31 downto 5) <= (others=>'0');
-                exe.csr_wdata(4 downto 0)  <= not exe.rs1_adr and exe.csr_rdata(4 downto 0);
-
-            when others   => 
-                exe.csr_wdata <= (others=>'-');
-        end case; 
-    end process;
-
-
-    -- Write Access 
-    sp_csr_wr : process (i_clk)
-    begin
-        if rising_edge(i_clk) then
-            if i_rst then
-                exe.csr.mstatus <= (others=>'-');
-
-            -- Software writes by CSR instructions
-            elsif exe.ctrl.sys then
-                case exe.imm32(11 downto 0) is
-                    when CSR_FFLAGS  =>
-                    when CSR_FRM     =>
-                    when CSR_FCSR    =>
-
-                    when CSR_MSTATUS =>
-                        exe.csr.mstatus(MIE)  <= exe.csr_wdata(MIE); 
-                    
-                    when CSR_MIE =>
-                        exe.csr.mie(MSI) <= exe.csr_wdata(MSI); 
-                        exe.csr.mie(MTI) <= exe.csr_wdata(MTI); 
-                        exe.csr.mie(MEI) <= exe.csr_wdata(MEI); 
-                    
-                    when CSR_MCYCLE =>
-                        exe.csr.mcycle   <= exe.csr_wdata; 
-                        
-                    when CSR_MINSTRET =>
-                        exe.csr.minstret <= exe.csr_wdata; 
-
-                    when CSR_MCOUNTINHIBIT => 
-                        exe.csr.mcountinhibit(CY) <= exe.csr_wdata(CY);
-                        exe.csr.mcountinhibit(IR) <= exe.csr_wdata(IR);
-
-                    when others =>
-                        null;
-                end case;    
-
-            -- Hardware writes by CPU
-            else 
-                
-                
-
-                --exe.csr.fflags      <= ; TODO: add these with FP extension 
-                --exe.csr.frm         <= ; TODO: add these with FP extension 
-                --exe.csr.fcsr        <= ; TODO: add these with FP extension 
-                --exe.csr.mstatus(FS) <= ; TODO: add these with FP extension 
-                --exe.csr.mstatus(SD) <= ; TODO: add these with FP extension
-                
-                exe.csr.mstatus(MPIE) <= ;
-                
-                exe.csr.mip(MSI) <=
-                exe.csr.mip(MTI) <=
-                exe.csr.mip(MEI) <=
-
-                exe.csr.mtime    <= 
-                exe.csr.mcycle   <= 
-                exe.csr.minstret <=
-
-                exe.csr.mepc(1 downto 0)  <= b"00";
-                exe.csr.mepc(31 downto 2) <= ;
-
-                exe.csr.mcause(INTR) <= 
-                exe.csr.mcause(CODE) <= 
-
-                if then
-                    
-
-                elsif  then
-                
-                else 
-                
-                end if;
-            end if; 
-        end if;
-    end process;
-
-
-    -- Read Access
-    ap_csr_rd : process(all)
-    begin 
-
-        exe.csr_rdata <= (others=>'0'); -- default
-
-        if exe.ctrl.sys then
-            case exe.imm32(11 downto 0) is
-                
-                --when CSR_FFLAGS  => exe.csr_rdata <= exe.csr.fflags; TODO: add these with FP extension
-                --when CSR_FRM     => exe.csr_rdata <= exe.csr.frm   ; TODO: add these with FP extension
-                --when CSR_FCSR    => exe.csr_rdata <= exe.csr.fcsr  ; TODO: add these with FP extension
-
-                when CSR_TIME =>
-                    exe.csr_rdata <= exe.csr.mtime; 
-            
-                when CSR_MHARTID =>
-                    exe.csr_rdata  <= HART_ID;
-
-                when CSR_MSTATUS =>
-                    exe.csr_rdata(MIE)  <= exe.csr.mstatus(MIE) ;
-                    exe.csr_rdata(MPIE) <= exe.csr.mstatus(MPIE);
-                    --exe.csr_rdata(FS)   <= exe.csr.mstatus(FS)  ; TODO: add these with FP extension
-                    --exe.csr_rdata(SD)   <= exe.csr.mstatus(SD)  ; TODO: add these with FP extension
-                
-                when CSR_MTVEC =>
-                    exe.csr_rdata(MODE) <= b"00"; -- Direct mode - All exceptions set PC to BASE
-                    exe.csr_rdata(BASE) <= TRAP_ADDR(31 downto 2); 
-
-                when CSR_MIE =>
-                    exe.csr_rdata(MSI) <= exe.csr.mie(MSI); 
-                    exe.csr_rdata(MTI) <= exe.csr.mie(MTI); 
-                    exe.csr_rdata(MEI) <= exe.csr.mie(MEI); 
-
-                when CSR_MIP =>
-                    exe.csr_rdata(MSI) <= exe.csr.mip(MSI); 
-                    exe.csr_rdata(MTI) <= exe.csr.mip(MTI); 
-                    exe.csr_rdata(MEI) <= exe.csr.mip(MEI); 
-
-                when CSR_MCYCLE | CSR_CYCLE =>
-                    exe.csr_rdata <= exe.csr.mcycle; 
-
-                when CSR_MINSTRET | CSR_INSTRET =>
-                    exe.csr_rdata <= exe.csr.minstret; 
-                
-                when CSR_MCOUNTINHIBIT => 
-                    exe.csr_rdata(CY) <= exe.csr.mcountinhibit(CY); 
-                    exe.csr_rdata(IR) <= exe.csr.mcountinhibit(IR);
-
-                when CSR_MEPC =>
-                    exe.csr_rdata(1 downto 0)  <= b"00";
-                    exe.csr_rdata(31 downto 2) <= exe.csr.mepc(31 downto 2);
-
-                when CSR_MCAUSE =>
-                    exe.csr_rdata(INTR) => exe.csr.mcause(INTR);
-                    exe.csr_rdata(CODE) => exe.csr.mcause(CODE);
-
-                when others =>
-                    null;
-            end case;
-        end if;
-    end process; 
-
-    -- Select between the ALU and CSRs for data to feed to next stage
-    exe.exe_rslt <= exe.csr_rdata when exe.ctrl.sys else exe.alu_rslt; 
-
-
     
-    -- 
     -- =========================================================================
     -- Execute/Memory Registers ================================================
     -- =========================================================================
@@ -523,18 +414,14 @@ begin
         if rising_edge(i_clk) then
             if (i_rst or haz.mem_flush) then
             
-            else 
-                if (haz.mem_stall) then
-                
-                else 
-                    mem.ctrl     <= exe.ctrl; 
-                    mem.exe_rslt <= exe.exe_rslt;
-                    mem.rs2_dat  <= exe.rs2_dat;
-                    mem.rs2_adr  <= exe.rs2_adr;
-                    mem.funct3   <= exe.funct3; 
-                    mem.pc4      <= exe.pc4; 
-                    mem.rdst_adr <= exe.rdst_adr; 
-                end if;
+            elsif haz.mem_enable then
+                mem.ctrl     <= exe.ctrl; 
+                mem.alu_rslt <= exe.alu_rslt;
+                mem.rs2_dat  <= exe.rs2_dat;
+                mem.rs2_adr  <= exe.rs2_adr;
+                mem.funct3   <= exe.funct3; 
+                mem.pc       <= exe.pc; 
+                mem.rdst_adr <= exe.rdst_adr; 
             end if; 
         end if;
     end process;
@@ -545,16 +432,18 @@ begin
     -- =========================================================================
     o_dren <= mem.ctrl.mem_rd;  
     o_dwen <= mem.ctrl.mem_wr;       
-    o_daddr <= mem.exe_rslt; 
+    o_daddr <= mem.alu_rslt; 
     o_dwdat <= mem.rs2_dat; 
     
-    mem.data_ma_adr_excpt <= o_daddr(1) or o_daddr(0);
-    wrb.data_access_excpt <= i_derror;
+    mem.load_ma_adr_excpt <= mem.ctrl.mem_rd and (o_daddr(1) or o_daddr(0));
+    mem.load_access_excpt <= mem.ctrl.mem_rd and i_derror;
+    mem.store_ma_adr_excpt <= mem.ctrl.mem_wr and (o_daddr(1) or o_daddr(0));
+    mem.store_access_excpt <= mem.ctrl.mem_wr and i_derror;
 
     o_dfence <= '0'; -- TODO:  
-    --i_dstall   
 
-
+    -- Memory Access -----------------------------------------------------------
+    -- -------------------------------------------------------------------------
     -- Loads
     ap_data_load : process (all)
     begin
@@ -596,6 +485,243 @@ begin
     end process;
 
 
+
+    -- CSR Access --------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- Generate the csr write data (for CSR instr SW writes)
+    ap_csr_wdata : process (all)
+    begin
+
+        case mem.funct3 is 
+            when F3_CSRRW =>  
+                mem.csr_wdata <= mem.rs1_dat;
+
+            when F3_CSRRS =>
+                mem.csr_wdata <= mem.rs1_dat or mem.csr_rdata;
+
+            when F3_CSRRC =>
+                mem.csr_wdata <= not mem.rs1_dat and mem.csr_rdata;
+
+            when F3_CSRRWI =>  
+                mem.csr_wdata(31 downto 5) <= (others=>'0');
+                mem.csr_wdata(4 downto 0)  <= mem.rs1_adr;
+
+            when F3_CSRRSI =>
+                mem.csr_wdata(31 downto 5) <= mem.csr_rdata(31 downto 5);
+                mem.csr_wdata(4 downto 0)  <= mem.rs1_adr or mem.csr_rdata(4 downto 0);
+
+            when F3_CSRRCI =>
+                mem.csr_wdata(31 downto 5) <= (others=>'0');
+                mem.csr_wdata(4 downto 0)  <= not mem.rs1_adr and mem.csr_rdata(4 downto 0);
+
+            when others    => 
+                mem.csr_wdata <= (others=>'-');
+        end case; 
+    end process;
+
+    -- Was there a trap? 
+    mem.any_trap <= mem.ms_irq or mem.mt_irq or mem.me_irq or 
+                    mem.load_ma_adr_excpt or mem.load_access_excpt or 
+                    mem.store_ma_adr_excpt or mem.store_access_excpt or 
+                    mem.illegal_instr or mem.ecall_except or mem.ebreak_except or 
+                    mem.instr_adr_ma_excpt or mem.instr_access_excpt; 
+
+    -- mepc (1:0) must always be forced to 0
+    mem.csr.mepc(1 downto 0)  <= b"00";
+
+    -- Writes
+    sp_csr_wr : process (i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_rst) then
+                mem.csr.mstatus <= (others=>'-');
+                -- TODO: reset values 
+
+            -- Software writes by CSR instructions
+            else 
+                if (mem.csr_access) then
+                    case mem.imm32(11 downto 0) is
+                        when CSR_FFLAGS  =>
+                        when CSR_FRM     =>
+                        when CSR_FCSR    =>
+
+                        when CSR_MSTATUS =>
+                            mem.csr.mstatus(MIE)  <= mem.csr_wdata(MIE); 
+                        
+                        when CSR_MIE =>
+                            mem.csr.mie(MSI) <= mem.csr_wdata(MSI); 
+                            mem.csr.mie(MTI) <= mem.csr_wdata(MTI); 
+                            mem.csr.mie(MEI) <= mem.csr_wdata(MEI); 
+                        
+                        when CSR_MSTATUS
+
+                        when CSR_MEPC
+
+                        when CSR_MSTATUS
+                        
+                        when CSR_MCYCLE =>
+                            mem.csr.mcycle   <= mem.csr_wdata; 
+                            
+                        when CSR_MINSTRET =>
+                            mem.csr.minstret <= mem.csr_wdata; 
+
+                        when CSR_MCOUNTINHIBIT => 
+                            mem.csr.mcountinhibit(CY) <= mem.csr_wdata(CY);
+                            mem.csr.mcountinhibit(IR) <= mem.csr_wdata(IR);
+
+                        when others =>
+                            null;
+                    end case;   
+                end if;  
+
+                -- Hardware writes by CPU
+                -- These take priority over a software write if they happen on the
+                -- same cycle
+                
+                
+
+                --mem.csr.fflags      <= ; TODO: add these with FP extension 
+                --mem.csr.frm         <= ; TODO: add these with FP extension 
+                --mem.csr.fcsr        <= ; TODO: add these with FP extension 
+                --mem.csr.mstatus(FS) <= ; TODO: add these with FP extension 
+                --mem.csr.mstatus(SD) <= ; TODO: add these with FP extension
+                
+                mem.csr.mip(MSI) <= i_ms_irq;
+                mem.csr.mip(MTI) <= i_me_irq;
+                mem.csr.mip(MEI) <= i_mt_irq;
+
+                mem.csr.mtime    <= 
+                mem.csr.mcycle   <= 
+                mem.csr.minstret <=
+
+                if (mem.any_trap) then
+                    mem.csr.mstatus(MPIE) <= mem.csr.mstatus(MIE);
+                end if;   
+
+                -- Set epc and mcause during a trap
+                -- NOTE: SW is expected to increment the epc to the next instruction 
+                -- for an ecall/ebreak. If SW doesnt do this, then we'll get caught 
+                -- in an ecall / irq handler / mret ... loop 
+                -- I wanted to set the epc to pc+4 for ecall/ebreak, but doing so 
+                -- would violate the RISCV specification
+                if (mem.ms_irq_pulse) then 
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '1'; 
+                    mem.csr.mcause(CODE)      <= TRAP_MSI_IRQ; --3
+                elsif (mem.mt_irq_pulse) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '1'; 
+                    mem.csr.mcause(CODE)      <= TRAP_MTI_IRQ; --7
+                elsif (mem.me_irq_pulse) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '1'; 
+                    mem.csr.mcause(CODE)      <= TRAP_MEI_IRQ; --11
+                elsif (mem.instr_adr_ma_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_IMA; --0
+                elsif (mem.instr_access_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_IACC; --1
+                elsif (mem.illegal_instr_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_ILL_INTR; --2
+                elsif (mem.ebreak_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc4(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_EBREAK; --3
+                elsif (mem.load_adr_ma_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_LMA; --4
+                elsif (mem.load_access_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_LACC; --5
+                elsif (mem.store_adr_ma_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_SMA; --6
+                elsif (mem.store_access_excpt) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_SACC; --7
+                elsif (mem.ecall_except) then
+                    mem.csr.mepc(31 downto 2) <= mem.pc4(31 downto 2);
+                    mem.csr.mcause(INTR)      <= '0'; 
+                    mem.csr.mcause(CODE)      <= TRAP_MECALL; --11
+                end if; 
+            end if; 
+        end if;
+    end process;
+
+
+    -- Reads
+    ap_csr_rd : process(all)
+    begin 
+
+        mem.csr_rdata <= (others=>'0'); -- default
+
+        if (mem.csr_access) then
+            case mem.imm32(11 downto 0) is
+                
+                --when CSR_FFLAGS  => mem.csr_rdata <= mem.csr.fflags; TODO: add these with FP extension
+                --when CSR_FRM     => mem.csr_rdata <= mem.csr.frm   ; TODO: add these with FP extension
+                --when CSR_FCSR    => mem.csr_rdata <= mem.csr.fcsr  ; TODO: add these with FP extension
+
+                when CSR_TIME =>
+                    mem.csr_rdata <= mem.csr.mtime; 
+            
+                when CSR_MHARTID =>
+                    mem.csr_rdata  <= HART_ID;
+
+                when CSR_MSTATUS =>
+                    mem.csr_rdata(MIE)  <= mem.csr.mstatus(MIE) ;
+                    mem.csr_rdata(MPIE) <= mem.csr.mstatus(MPIE);
+                    --mem.csr_rdata(FS)   <= mem.csr.mstatus(FS)  ; TODO: add these with FP extension
+                    --mem.csr_rdata(SD)   <= mem.csr.mstatus(SD)  ; TODO: add these with FP extension
+                
+                when CSR_MTVEC =>
+                    mem.csr_rdata(MODE) <= b"00"; -- Direct mode - All exceptions set PC to BASE
+                    mem.csr_rdata(BASE) <= TRAP_ADDR(31 downto 2); 
+
+                when CSR_MIE =>
+                    mem.csr_rdata(MSI) <= mem.csr.mie(MSI); 
+                    mem.csr_rdata(MTI) <= mem.csr.mie(MTI); 
+                    mem.csr_rdata(MEI) <= mem.csr.mie(MEI); 
+
+                when CSR_MIP =>
+                    mem.csr_rdata(MSI) <= mem.csr.mip(MSI); 
+                    mem.csr_rdata(MTI) <= mem.csr.mip(MTI); 
+                    mem.csr_rdata(MEI) <= mem.csr.mip(MEI); 
+
+                when CSR_MCYCLE | CSR_CYCLE =>
+                    mem.csr_rdata <= mem.csr.mcycle; 
+
+                when CSR_MINSTRET | CSR_INSTRET =>
+                    mem.csr_rdata <= mem.csr.minstret; 
+                
+                when CSR_MCOUNTINHIBIT => 
+                    mem.csr_rdata(CY) <= mem.csr.mcountinhibit(CY); 
+                    mem.csr_rdata(IR) <= mem.csr.mcountinhibit(IR);
+
+                when CSR_MEPC =>
+                    mem.csr_rdata(1 downto 0)  <= b"00";
+                    mem.csr_rdata(31 downto 2) <= mem.csr.mepc(31 downto 2);
+
+                when CSR_MCAUSE =>
+                    mem.csr_rdata(INTR) => mem.csr.mcause(INTR);
+                    mem.csr_rdata(CODE) => mem.csr.mcause(CODE);
+
+                when others =>
+                    null;
+            end case;
+        end if;
+    end process; 
+
+
     -- =========================================================================
     -- Memory/Writeback Registers ==============================================
     -- =========================================================================
@@ -604,15 +730,13 @@ begin
         if rising_edge(i_clk) then
             if (i_rst or haz.wrb_flush) then
             
-            else 
-                if (haz.wrb_stall) then
-                
-                else 
-                    wrb.ctrl     <= mem.ctrl; 
-                    wrb.exe_rslt <= mem.exe_rslt;
-                    wrb.pc4      <= mem.pc4; 
-                    wrb.rdst_adr <= mem.rdst_adr;
-                end if;
+
+            elsif (haz.wrb_enable) then
+                wrb.ctrl      <= mem.ctrl; 
+                wrb.alu_rslt  <= mem.alu_rslt;
+                wrb.pc4       <= std_logic_vector(unsigned(mem.pc) + 4);
+                wrb.rdst_adr  <= mem.rdst_adr;
+                wrb.csr_rdata <= mem.csr_rdata; 
             end if; 
         end if;
     end process;
@@ -624,10 +748,11 @@ begin
     ap_wrb_mux : process (all) 
     begin
         case (wrb.ctrl.wrb_sel) is 
-            when WRB_SEL_EXE_RESULT => wrb.rdst_dat <= wrb.exe_rslt;
-            when WRB_SEL_MEM        => wrb.rdst_dat <= wrb.memrd_dat;
-            when WRB_SEL_PC4        => wrb.rdst_dat <= wrb.pc4; 
-            when others             => wrb.rdst_dat <= (others=>'-');
+            when WRB_SEL_ALU => wrb.rdst_dat <= wrb.alu_rslt;
+            when WRB_SEL_MEM => wrb.rdst_dat <= wrb.memrd_dat;
+            when WRB_SEL_CSR => wrb.rdst_dat <= wrb.csr_rdata;
+            when WRB_SEL_PC4 => wrb.rdst_dat <= wrb.pc4; 
+            when others      => wrb.rdst_dat <= (others=>'-');
         end case; 
     end process; 
 
@@ -659,11 +784,12 @@ begin
         -- Forwarding to decode stage
         -- should only need to forward to decode stage if it is a branch or jalr instruction 
         -- TODO: add logic to check for branch in decode stage (I think )
-        -- Can I forward regardless of it being a branch? 
+        -- Can I forward regardless of it being a branch? I beleive I can. This shouldnt hurt 
+        -- anything 
         -- RS1
         --if    (exe.ctrl.reg_wr = '1' and exe.rdst_adr /= b"00000" and exe.rdst_adr = dec.rs1_adr) then
         --    haz.dec_rs1_fw_sel <= EXE_FW;
-        elsif (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs1_adr) then
+        if (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs1_adr) then
             haz.dec_rs1_fw_sel <= MEM_FW;
         elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = dec.rs1_adr) then
             haz.dec_rs1_fw_sel <= WRB_FW;
@@ -673,7 +799,7 @@ begin
         -- RS2
         --if    (exe.ctrl.reg_wr = '1' and exe.rdst_adr /= b"00000" and exe.rdst_adr = dec.rs2_adr) then
         --    haz.dec_rs2_fw_sel <= EXE_FW;
-        elsif (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs2_adr) then
+        if (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs2_adr) then
             haz.dec_rs2_fw_sel <= MEM_FW;
         elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = dec.rs2_adr) then
             haz.dec_rs2_fw_sel <= WRB_FW;
@@ -716,86 +842,123 @@ begin
 
 
 
-    -- Stalling ----------------------------------------------------------------
+    -- Stalling & Flushing -----------------------------------------------------
     -- -------------------------------------------------------------------------
 
-    -- Load Hazard - if load is in mem while dependent instruction is in an earlier stage, 
-    -- stall the pipe till load is in wrb and can be forwarded to the earlier stage
+    -- Data Hazards ------------------------------------------------------------
+    -- Load Hazard - if load is in exe while dependent instruction is in dec, 
+    -- stall the pipe.
     -- This is a "data hazard" that is not solvable by pure forwarding
     -- Dont need to check mem.ctrl.reg_wr because we know that is already 1 if mem.ctrl.mem_rd is 1
-    ld_hazard <= '1' when   mem.ctrl.mem_rd = '1' 
-                      and   mem.rdst_adr /= b"00000"
-                      and ((mem.rdst_adr = exe.rs1_adr or mem.rdst_adr = exe.rs2_adr) 
-                       or  (mem.rdst_adr = dec.rs1_adr or mem.rdst_adr = dec.rs2_adr)) 
-                else '0'; 
+    haz.ld_hazard <= '1' when  exe.ctrl.mem_rd = '1' 
+                      and  exe.rdst_adr /= b"00000"
+                      and (exe.rdst_adr = dec.rs1_adr or exe.rdst_adr = dec.rs2_adr) 
+                    else '0'; 
 
 
-
-    -- Branch Hazards - AKA control hazards 
+    -- Data Hazards (due to branches being calculated in the dec phase)
     -- if branch is in ID while ld is in EX or MEM wait till ld gets to WB
-    -- The following 2 commented out cases should get handled by standard br and jalr hazards
-    --br_ld_ex_hazard  <= '1' when id_ctrl.branch = '1' and ex.mem_rd = '1' and ex.rdest /= "00000" and (ex.rdest = id_rs1 or ex.rdest = id_rs2) else '0'; 
-    --jalr_ld_ex_hazard  <= '1' when id_ctrl.branch = '1' and ex.mem_rd = '1' and ex.rdest /= "00000" and ex.rdest = id_rs1 else '0'; 
-    br_ld_mem_hazard <= '1' when id_ctrl.branch = '1' and mem.mem_rd = '1' and mem.rdest /= "00000" and (mem.rdest = id_rs1 or mem.rdest = id_rs2) else '0'; 
-    jalr_ld_mem_hazard <= '1' when id_ctrl.branch = '1' and mem.mem_rd = '1' and mem.rdest /= "00000" and mem.rdest = id_rs1 else '0'; 
+    haz.br_ld_mem_hazard <= '1' when dec.ctrl.branch = '1' 
+                             and mem.mem_rd = '1' 
+                             and mem.rdst_adr /= "00000" 
+                             and (mem.rdst_adr = dec.rs1_adr 
+                              or mem.rdst_adr = dec.rs2_adr) 
+                    else '0'; 
+
+    haz.jalr_ld_mem_hazard <= '1' when dec.ctrl.jalr = '1' 
+                               and mem.mem_rd = '1' 
+                               and mem.rdst_adr /= "00000" 
+                               and mem.rdst_adr = dec.rs1_adr 
+                    else '0'; 
 
     -- if branch is in ID while add,etc is in EX, wait till add,etc is in MEM
-    br_hazard <= '1' when id_ctrl.branch = '1' and ex.reg_wr = '1' and ex.rdest /= "00000" and (ex.rdest = id_rs1 or ex.rdest = id_rs2) else '0';
-    jalr_hazard <= '1' when id_ctrl.jalr = '1' and ex.reg_wr = '1' and ex.rdest /= "00000" and (ex.rdest = id_rs1) else '0';  
+    haz.br_hazard <= '1' when dec.ctrl.branch = '1' 
+                      and exe.reg_wr = '1' 
+                      and exe.rdst_adr /= "00000" 
+                      and (exe.rdst_adr = dec.rs1_adr 
+                       or exe.rdst_adr = dec.rs2_adr) 
+                    else '0';
 
-    -- exception hazards -- TODO: 
+    haz.jalr_hazard <= '1' when dec.ctrl.jalr = '1' 
+                        and exe.reg_wr = '1' 
+                        and exe.rdst_adr /= "00000" 
+                        and (exe.rdst_adr = dec.rs1_adr) 
+                    else '0';  
 
+    -- If an mret instr follows an epc csr write, then we need to stall until the 
+    -- epc is updated with the latest value 
+    haz.mret_hazard <= '1' when dec.mret = '1' 
+                            and exe.csr_access = '1' 
+                            and mem.rs1_adr /= b"00000"
+                            and exe.imm32(11 downto 0) = CSR_MEPC
+                        else '0'; 
 
-    ap_stalls : process (all)
+    ap_flush_stall : process (all)
     begin
-        if (ld_hazard = '1') then   -- stall at dec, bubble at exe
-            haz.pc_stall  <= '1'; 
-            haz.dec_stall <= '1';
-            haz.exe_stall <= '0';
-            haz.mem_stall <= '0';
-            haz.wrb_stall <= '0';
+        -- Defaults 
+        haz.pc_enable  <= '1'; 
+        haz.dec_enable <= '1';
+        haz.exe_enable <= '1';
+        haz.mem_enable <= '1';
+        haz.wrb_enable <= '1';
+        haz.dec_flush  <= '0';
+        haz.exe_flush  <= '0'; 
+        haz.mem_flush  <= '0';
+        haz.wrb_flush  <= '0';
 
-            haz.dec_flush <= '0';
+
+        -- Control Hazards -----------------------------------------------------
+        
+        -- kill the instruction that caused the trap after it has written its trap information during the memory stage
+        -- This way, any illegal value that comes from an illegal instruction does not get writen back 
+        if (mem.any_trap) then 
+            haz.wrb_flush <= '1'; 
+        end if; 
+
+        -- Memory stage exceptions 
+        if (mem.load_ma_adr_excpt or mem.load_access_excpt or
+                mem.store_ma_adr_excpt or mem.store_access_excpt) then
+            haz.dec_flush <= '1';
             haz.exe_flush <= '1'; 
-            haz.mem_flush <= '0';
-            haz.wrb_flush <= '0';
+            haz.mem_flush <= '1';
 
-        elsif (br_hazard = '1' or jalr_hazard = '1') then -- stall at decode, bubble at execute
-            hz.pc_stall    <= '1'; 
+        -- Decode stage exceptions (and mret) 
+        elsif (dec.illegal_instr or dec.ecall_except or dec.ebreak_except or dec.mret) then
+            haz.dec_flush <= '1';
+        
+        -- Fetch stage exceptions dont need to remove any unnecessarially fetched instructions
 
-            hz.ifid_stall  <= '1';
-            hz.idex_stall  <= '0';
-            hz.exmem_stall <= '0';
-            hz.memwb_stall <= '0';
+        -- Branch Mispredicts 
+        elsif (dec.br_taken) then -- kill the mispredicted instruction
+            haz.exe_flush <= '1'; -- is this right? should it be dec_flush? 
+        
+        end if; 
 
-            hz.ifid_flush  <= '0';
-            hz.idex_flush  <= '1'; 
-            hz.exmem_flush <= '0';
-            hz.memwb_flush <= '0';
-        elsif (br_ld_mem_hazard = '1' or jalr_ld_mem_hazard = '1') then -- stall at decode, bubble at mem
-            hz.pc_stall    <= '1'; 
 
-            hz.ifid_stall  <= '1';
-            hz.idex_stall  <= '0';
-            hz.exmem_stall <= '0';
-            hz.memwb_stall <= '0';
+        -- Wait on Memory ------------------------------------------------------
+        if (i_dstall) then -- pause the pipe while waiting on dmem stall
+            haz.pc_enable  <= '0'; 
+            haz.dec_enable <= '0';
+            haz.exe_enable <= '0'; 
+            haz.mem_enable <= '0';
+            haz.wrb_flush  <= '1';
 
-            hz.ifid_flush  <= '0';
-            hz.idex_flush  <= '0'; 
-            hz.exmem_flush <= '1';
-            hz.memwb_flush <= '0';
-        else 
-            hz.pc_stall    <= '0'; 
+        elsif (i_istall) then -- pause the pipeline while waiting on the imem stall 
+            haz.pc_enable  <= '0'; 
+            haz.dec_flush  <= '1'; 
 
-            hz.ifid_stall  <= '0';
-            hz.idex_stall  <= '0';
-            hz.exmem_stall <= '0';
-            hz.memwb_stall <= '0';
 
-            hz.ifid_flush  <= '0';
-            hz.idex_flush  <= '0'; 
-            hz.exmem_flush <= '0';
-            hz.memwb_flush <= '0';
+
+        -- Data Hazards --------------------------------------------------------
+        elsif (haz.ld_hazard or haz.br_hazard or haz.jalr_hazard or haz.mret_hazard) then -- stall at dec, bubble at exe
+            haz.pc_enable  <= '0'; 
+            haz.dec_enable <= '0';
+            haz.exe_flush  <= '1'; 
+
+        elsif (haz.br_ld_mem_hazard or haz.jalr_ld_mem_hazard) then -- stall at dec, bubble at mem
+            haz.pc_enable  <= '0'; 
+            haz.dec_enable <= '0';
+            haz.mem_flush  <= '1';
         end if; 
     end process;
 

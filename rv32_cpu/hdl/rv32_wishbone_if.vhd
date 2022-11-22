@@ -144,7 +144,7 @@ begin
     -- in which case, data is valid the cycle stall goes low. 
     -- Stall and error will only be affected by the wishbone interface.
     -- Internal memory accesses will not cause a stall or error 
-    o_stall <= reg_wb_cyc and not i_wb_ack;
+    o_stall <= o_wb_cyc and not i_wb_ack and not i_wb_err;
     o_error <= i_wb_err;
     o_rdat  <= i_wb_rdat; 
 

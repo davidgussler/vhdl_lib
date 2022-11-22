@@ -23,6 +23,7 @@ use work.gen_utils_pkg.all;
 
 entity wb_regs_example is 
     port(
+        --  Clock & Reset
         i_clk : in std_logic;
         i_rst : in std_logic;
 
@@ -76,23 +77,23 @@ architecture rtl of wb_regs_example is
     subtype  REG4_VEC0 is natural range 15 downto 8;
     subtype  REG5_VEC0 is natural range 31 downto 0;
 
-    -- wbregs generics ---------------------------------------------------------
+    -- wb_regs generics ---------------------------------------------------------
     -- -------------------------------------------------------------------------
     constant C_DAT_WIDTH_L2 : positive := 5;
     constant C_NUM_REGS     : positive := 6;
     constant C_NUM_ADR_BITS : positive := 8;
-    constant C_EN_ASSERT : boolean := TRUE;
+    constant C_EN_ASSERT    : boolean := TRUE;
 
     constant C_REG_ADR :
         slv_array_t(C_NUM_REGS-1 downto 0)(C_NUM_ADR_BITS-1 downto 0) :=
-        (
-            REG0_RO => X"00",
-            REG1_RO => X"04",
-            REG2_RO => X"08",
-            REG3_RW => X"0C",
-            REG4_RW => X"10",
-            REG5_RW => X"14"
-        );
+    (
+        REG0_RO => X"00",
+        REG1_RO => X"04",
+        REG2_RO => X"08",
+        REG3_RW => X"0C",
+        REG4_RW => X"10",
+        REG5_RW => X"14"
+    );
 
     constant C_REG_TYPE : 
         regtype_array_t(C_NUM_REGS-1 downto 0) :=

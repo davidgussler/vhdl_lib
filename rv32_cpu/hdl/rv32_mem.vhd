@@ -199,18 +199,18 @@ begin
         if rising_edge(i_clk) then
             if (int_iren) then
                 reg_int_iread <= '1'; 
-                reg_ext_iread <= '0';
+                --reg_ext_iread <= '0';
             elsif (ext_iren) then
                 reg_int_iread <= '0'; 
-                reg_ext_iread <= '1';
+                --reg_ext_iread <= '1';
             end if; 
 
             if (int_dren) then
                 reg_int_dread <= '1'; 
-                reg_ext_dread <= '0';
+                --reg_ext_dread <= '0';
             elsif (ext_dren) then
                 reg_int_dread <= '0'; 
-                reg_ext_dread <= '1';
+                --reg_ext_dread <= '1';
             end if; 
 
         end if;

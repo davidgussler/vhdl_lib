@@ -11,7 +11,7 @@
 --            09-23-2022 | 1.0     | Initial 
 -- *****************************************************************************
 -- Description : 
---    Generic Wishbone B4 Pipelined register bankS
+--    Generic Wishbone B4 Pipelined register banks
 -- Generics
 -- 
 -- Formula to find minimum for G_NUM_ADR_BITS: clog2(G_NUM_REGS)+G_DAT_WIDTH_LOG2-3
@@ -84,8 +84,6 @@ end entity;
 
 
 architecture rtl of wb_regs is 
-    -- Registers / Wires (depends on generics)
-    signal regs_out : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
     -- Wires
     signal idx : integer;
@@ -98,14 +96,13 @@ begin
     -- -------------------------------------------------------------------------
     o_wbs_stl <= '0';
     o_wbs_err <= '0';
-    o_regs <= regs_out;
 
 
     -- Simple Comb Logic -------------------------------------------------------
     -- -------------------------------------------------------------------------
     idx <= to_integer(unsigned(i_wbs_adr(G_NUM_ADR_BITS-1 downto G_DAT_WIDTH_L2-3)));
-    valid_wb_write <= '1' when i_wbs_cyc and i_wbs_stb and i_wbs_wen else '0';
-    valid_wb_read  <= '1' when i_wbs_cyc and i_wbs_stb and not i_wbs_wen else '0';
+    valid_wb_write <= i_wbs_cyc and i_wbs_stb and i_wbs_wen;
+    valid_wb_read  <= i_wbs_cyc and i_wbs_stb and not i_wbs_wen;
 
     -- Expand the select signal out to a byte mask 
     process (all)
@@ -152,21 +149,21 @@ begin
                     prc_regs_out : process (i_clk) begin
                         if (rising_edge(i_clk)) then
                             if (i_rst) then
-                                regs_out(reg_idx)(bit_idx) <= G_REG_RST_VAL(reg_idx)(bit_idx);
+                                o_regs(reg_idx)(bit_idx) <= G_REG_RST_VAL(reg_idx)(bit_idx);
                             elsif (valid_wb_write = '1' and reg_idx = idx) then
-                                regs_out(reg_idx)(bit_idx) <= i_wbs_dat(bit_idx) and sel_mask(bit_idx);
+                                o_regs(reg_idx)(bit_idx) <= i_wbs_dat(bit_idx) and sel_mask(bit_idx);
                             end if; 
                         end if; 
                     end process;
 
                 else generate
-                    regs_out(reg_idx)(bit_idx) <= '0';
+                    o_regs(reg_idx)(bit_idx) <= '0';
 
                 end generate; 
             end generate;
         else generate 
             o_wr_pulse(reg_idx) <= '0';
-            regs_out(reg_idx) <= (others=>'0');
+            o_regs(reg_idx) <= (others=>'0');
 
         end generate;
     end generate;
@@ -188,7 +185,7 @@ begin
                     if (G_REG_TYPE(idx) = RO_REG) then
                         o_wbs_dat <= i_regs(idx) and sel_mask and G_REG_USED_BITS(idx);
                     else 
-                        o_wbs_dat <= regs_out(idx) and sel_mask; 
+                        o_wbs_dat <= o_regs(idx) and sel_mask; 
                     end if;
                 else 
                     o_wbs_ack <= '0';

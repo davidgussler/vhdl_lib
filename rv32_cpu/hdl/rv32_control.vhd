@@ -37,7 +37,7 @@ begin
         case i_opcode is
         when OPCODE_LUI => 
             o_ctrl.reg_wr   <= '1';
-            o_ctrl.wrb_sel  <= WRB_SEL_EXE_RESULT;
+            o_ctrl.wrb_sel  <= WRB_SEL_ALU;
             o_ctrl.mem_wr   <= '0';
             o_ctrl.mem_rd   <= '0'; 
             o_ctrl.alu_ctrl <= ALU_CTRL_ADD; 
@@ -47,11 +47,10 @@ begin
             o_ctrl.jalr     <= '0';
             o_ctrl.branch   <= '0';
             o_ctrl.imm_type <= UTYPE;
-            o_ctrl.exe_unit <= INT_ALU_UNIT; 
   
         when OPCODE_AUIPC => 
             o_ctrl.reg_wr   <= '1';
-            o_ctrl.wrb_sel  <= WRB_SEL_EXE_RESULT;
+            o_ctrl.wrb_sel  <= WRB_SEL_ALU;
             o_ctrl.mem_wr   <= '0';
             o_ctrl.mem_rd   <= '0';
             o_ctrl.alu_ctrl <= ALU_CTRL_ADD; 
@@ -61,11 +60,10 @@ begin
             o_ctrl.jalr     <= '0';
             o_ctrl.branch   <= '0';
             o_ctrl.imm_type <= UTYPE;  
-            o_ctrl.exe_unit <= INT_ALU_UNIT; 
   
         when OPCODE_ALUI  =>
             o_ctrl.reg_wr   <= '1';
-            o_ctrl.wrb_sel  <= WRB_SEL_EXE_RESULT;
+            o_ctrl.wrb_sel  <= WRB_SEL_ALU;
             o_ctrl.mem_wr   <= '0';
             o_ctrl.mem_rd   <= '0';
             o_ctrl.alu_ctrl <= ALU_CTRL_ALU;
@@ -79,7 +77,7 @@ begin
   
         when OPCODE_ALUR  =>
             o_ctrl.reg_wr   <= '1';
-            o_ctrl.wrb_sel  <= WRB_SEL_EXE_RESULT;
+            o_ctrl.wrb_sel  <= WRB_SEL_ALU;
             o_ctrl.mem_wr   <= '0';
             o_ctrl.mem_rd   <= '0';
             o_ctrl.alu_ctrl <= ALU_CTRL_ALU;
@@ -177,8 +175,8 @@ begin
             o_ctrl.fence    <= '1';
   
         when OPCODE_SYSTEM =>
-            o_ctrl.reg_wr   <= '0';
-            o_ctrl.wrb_sel  <= b"--";
+            o_ctrl.reg_wr   <= '1';
+            o_ctrl.wrb_sel  <= WRB_SEL_CSR;
             o_ctrl.mem_wr   <= '0';
             o_ctrl.mem_rd   <= '0';
             o_ctrl.alu_ctrl <= '-';  
@@ -189,7 +187,6 @@ begin
             o_ctrl.branch   <= '0';
             o_ctrl.imm_type <= ITYPE; 
             o_ctrl.exe_unit <= b"--"; 
-            o_ctrl.sys      <= '1';
   
         when others =>
             o_ctrl.reg_wr   <= '0';
