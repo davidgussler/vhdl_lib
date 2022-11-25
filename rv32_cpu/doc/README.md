@@ -2,7 +2,7 @@
 
 RISC V implementation
 
-## Requirements 
+## Design Choices
 
 * No hardware support for misaligned addresses 
 * no support for compressed instructions
@@ -10,6 +10,7 @@ RISC V implementation
 * Branch taken/not-taken and target address resolved in ID phase
 * JAL target address resolved in ID phase
 * JALR target address resolved in ID phase 
+* WFI instr will be a simple nop and will not increment the instret counter
 
 
 ## Non-compliance

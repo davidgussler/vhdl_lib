@@ -1,19 +1,14 @@
--- ###############################################################################################
--- # << RV32 CPU Package File>> #
--- *********************************************************************************************** 
--- Copyright 2022
--- *********************************************************************************************** 
--- File     : rv32_pkg.vhd
--- Author   : David Gussler - davidnguss@gmail.com 
--- Language : VHDL '08
--- History  :  Date      | Version | Comments 
---            --------------------------------
---            01-01-2021 | 1.0     | Initial 
--- *********************************************************************************************** 
--- Description : 
---   Useful description describing the description to describe the module
-
--- ###############################################################################################
+-- #############################################################################
+-- #  -<< RISC-V CPU Package File >>-
+-- # ===========================================================================
+-- # Copyright 2022, David Gusser
+-- # ===========================================================================
+-- # File     : rv32_pkg.vhd
+-- # Author   : David Gussler - davidnguss@gmail.com 
+-- # Language : VHDL '08
+-- # ===========================================================================
+-- # 
+-- #############################################################################
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -159,24 +154,11 @@ package rv32_pkg is
     constant F5_A_LR : std_logic_vector(4 downto 0) := "00010"; -- LR
     constant F5_A_SC : std_logic_vector(4 downto 0) := "00011"; -- SC
     -- ... TODO: here
-    
 
-    -- Integer ALU Opcodes -----------------------------------------------------
-    -- -------------------------------------------------------------------------
-    constant ALUOP_ADD  : std_logic_vector(3 downto 0) := '0' & F3_SUBADD ;
-    constant ALUOP_SUB  : std_logic_vector(3 downto 0) := '1' & F3_SUBADD ;
-    constant ALUOP_SLL  : std_logic_vector(3 downto 0) := '0' & F3_SLL    ;
-    constant ALUOP_SLT  : std_logic_vector(3 downto 0) := '0' & F3_SLT    ;
-    constant ALUOP_SLTU : std_logic_vector(3 downto 0) := '0' & F3_SLTU   ;
-    constant ALUOP_XOR  : std_logic_vector(3 downto 0) := '0' & F3_XOR    ;
-    constant ALUOP_SRL  : std_logic_vector(3 downto 0) := '0' & F3_SR     ;
-    constant ALUOP_SRA  : std_logic_vector(3 downto 0) := '1' & F3_SR     ;
-    constant ALUOP_OR   : std_logic_vector(3 downto 0) := '0' & F3_OR     ;
-    constant ALUOP_AND  : std_logic_vector(3 downto 0) := '0' & F3_AND    ;
  
 
 
-    
+
     -- =========================================================================
     -- CSRs ====================================================================
     -- =========================================================================
@@ -267,339 +249,289 @@ package rv32_pkg is
     constant MTI  : natural    := 7; 
     constant MEI  : natural    := 11;
     --
-    -- CSR_MCOUNTINHIBIT
-    subtype  CY  : natural    := 0;  
-    constant IR  : natural    := 2;  
-    
-    -- control signals
+    -- CSR_MTVEC
+    subtype  MODE is natural range 1 downto 0;
+    subtype  BASE is natural range 31 downto 2;
+    --
+    -- CSR_MCAUSE
+    constant INTR :  natural := 31;
+    subtype  CODE is natural range 30 downto 0;
+
+    -- Mcause Trap Codes -------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    constant TRAP_MEI_IRQ  : natural := 11; -- External Interrupt 
+    constant TRAP_MSI_IRQ  : natural := 3;  -- Software Interrupt
+    constant TRAP_MTI_IRQ  : natural := 7;  -- Timer Interrupt 
+    constant TRAP_IMA      : natural := 0;  -- Instruction Misaligned Address Exception
+    constant TRAP_IACC     : natural := 1;  -- Instruction Access Error Exception
+    constant TRAP_ILL_INTR : natural := 2;  -- Illegal Instruction Exception
+    constant TRAP_EBREAK   : natural := 3;  -- Ebreak Exception
+    constant TRAP_LMA      : natural := 4;  -- Load Misaligned Address Exception
+    constant TRAP_LACC     : natural := 5;  -- Load Access Exception 
+    constant TRAP_SMA      : natural := 6;  -- Store Misaligned Address Exception
+    constant TRAP_SACC     : natural := 7;  -- Store Access Exception
+    constant TRAP_MECALL   : natural := 11; -- Ecall Exception
+
+
+
+    -- =========================================================================
+    -- CPU Signals =============================================================
+    -- =========================================================================
+    -- 
+    -- Control Unit ------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     type ctrl_t is record      
         reg_wr   : std_logic;
-        wrb_sel  : std_logic_vector(1 downto 0); -- memout, pc4, or aluout mux in wb stage
-        mem_wr   : std_logic;   -- 1=read, 0=write
+        wrb_sel  : std_logic_vector(1 downto 0);
+        mem_wr   : std_logic;  
         mem_rd   : std_logic; 
+        alu_ctrl : std_logic;
+        alua_sel : std_logic_vector(1 downto 0);
+        alub_sel : std_logic; 
+        jal      : std_logic; 
         jalr     : std_logic;
         branch   : std_logic;
-        exe_unit : std_logic_vector(1 downto 0); -- select the execution unit in the execute stage
-        alu_ctrl : std_logic;
-        alu_a    : std_logic_vector(1 downto 0); -- register, PC, zero
-        alu_b    : std_logic; -- register, immediate
-        jal      : std_logic; 
         imm_type : std_logic_vector(2 downto 0);
-        fence    : std_logic; 
         sys      : std_logic;
+        fence    : std_logic; 
         illegal  : std_logic; 
     end record;
- 
-    -- pipeline phases
-    type fet_t is record      
-        pc    : std_logic_vector(31 downto 0);  
-        pc4   : std_logic_vector(31 downto 0); 
+
+    -- CSRs --------------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- run-time writable by cpu or by software 
+    type csr_t is record      
+        mstatus_mie  : std_logic; 
+        mstatus_mpie  : std_logic; 
+        mcause_intr   : std_logic; 
+        mcause_code   : std_logic_vector(30 downto 0); 
+        mie_msi: std_logic; 
+        mie_mti: std_logic; 
+        mie_mei: std_logic; 
+        mip_msi: std_logic; 
+        mip_mti: std_logic; 
+        mip_mei: std_logic; 
+        mepc     : std_logic_vector(31 downto 2);  
+        mcycle   : std_logic_vector(31 downto 0);  
+        minstret : std_logic_vector(31 downto 0);  
+    end record;
+
+
+    -- Fetch Stage -------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    type fet_t is record
+        -- Pipelined into next stage 
+        instret_incr       : std_logic;
+        ms_irq_pulse       : std_logic; 
+        mt_irq_pulse       : std_logic; 
+        me_irq_pulse       : std_logic; 
+        instr_adr_ma_excpt : std_logic;
+        instr_access_excpt : std_logic;
+        pc                 : std_logic_vector(31 downto 0);  
+
+        -- Not pipelined into next stage 
+        dly_mip_msi        : std_logic; 
+        dly_mip_mti        : std_logic; 
+        dly_mip_mei        : std_logic; 
+        trap_taken         : std_logic;
     end record;
  
- 
+    -- Decode Stage ------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     type dec_t is record 
-        opcode : std_logic_vector(6 downto 0);
-        rs1_adr: std_logic_vector(4 downto 0);
-        rs2_adr: std_logic_vector(4 downto 0);
-        rs1_dat: std_logic_vector(4 downto 0);
-        rs2_dat: std_logic_vector(4 downto 0);
-        rdst_adr : std_logic_vector(4 downto 0);
-        funct3 : std_logic_vector(2 downto 0);
-        funct7 : std_logic_vector(6 downto 0);
-        ctrl    : ctrl_t;
-        --pc4   : std_logic_vector(31 downto 0); 
-        --pc    : std_logic_vector(31 downto 0);  
-        instr : std_logic_vector(31 downto 0);
-        regfile : slv_array_t(1 to 31)(31 downto 0);
-        imm32 : std_logic_vector(31 downto 0);
+        -- Pipelined into next stage 
+        instret_incr       : std_logic; 
+        ms_irq_pulse       : std_logic; 
+        mt_irq_pulse       : std_logic; 
+        me_irq_pulse       : std_logic; 
+        instr_adr_ma_excpt : std_logic; 
+        instr_access_excpt : std_logic; 
+        ecall_excpt        : std_logic; 
+        ebreak_excpt       : std_logic; 
+        pc                 : std_logic_vector(31 downto 0);
+        ctrl               : ctrl_t;
+        rs1_adr            : std_logic_vector(4 downto 0);
+        rs2_adr            : std_logic_vector(4 downto 0);
+        rdst_adr           : std_logic_vector(4 downto 0);
+        rs1_dat            : std_logic_vector(4 downto 0);
+        rs2_dat            : std_logic_vector(4 downto 0);
+        imm32              : std_logic_vector(31 downto 0);
+        funct3             : std_logic_vector(2 downto 0);
+        funct7             : std_logic_vector(6 downto 0);
+
+        -- Not pipelined into next stage 
+        instr              : std_logic_vector(31 downto 0);
+        regfile            : slv_array_t(1 to 31)(31 downto 0);
+        opcode             : std_logic_vector(6 downto 0);
+        dec_fw_rs1_dat     : std_logic_vector(31 downto 0);
+        dec_fw_rs2_dat     : std_logic_vector(31 downto 0);
+        br_eq              : std_logic; 
+        br_ltu             : std_logic; 
+        br_lt              : std_logic; 
+        branch             : std_logic; 
+        br_taken           : std_logic; 
+        brt_adr            : std_logic_vector(31 downto 0); 
+        csr_access         : std_logic; 
+        mret               : std_logic; 
+        wfi                : std_logic; 
+        fence              : std_logic; 
+        fencei             : std_logic; 
     end record;
  
- 
+    -- Execute Stage -------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     type exe_t is record    
-        ctrl   : ctrl_t;
-  
-        rd    : std_logic_vector(4 downto 0);  
-        rs1      : std_logic_vector(4 downto 0);  
-        rs2      : std_logic_vector(4 downto 0);  
-        pc4      : std_logic_vector(31 downto 0);
-        imm32    : std_logic_vector(31 downto 0);
-        rs1_dat  : std_logic_vector(31 downto 0);
-        rs2_dat  : std_logic_vector(31 downto 0);
-        pc       : std_logic_vector(31 downto 0); 
-        funct3   : std_logic_vector(2 downto 0);
-        funct7   : std_logic_vector(6 downto 0);
- 
+        -- Pipelined into next stage 
+        instret_incr       : std_logic;
+        pc                 : std_logic_vector(31 downto 0); 
+        ctrl               : ctrl_t;
+        rs2_adr            : std_logic_vector(4 downto 0);  
+        rdst_adr           : std_logic_vector(4 downto 0);  
+        rs2_dat            : std_logic_vector(31 downto 0);
+        funct3             : std_logic_vector(2 downto 0);
+        exe_rslt           : std_logic_vector(31 downto 0);
+
+        -- Not pipelined into next stage 
+        ms_irq_pulse       : std_logic; 
+        mt_irq_pulse       : std_logic; 
+        me_irq_pulse       : std_logic; 
+        ecall_excpt        : std_logic; 
+        ebreak_excpt       : std_logic; 
+        instr_adr_ma_excpt : std_logic; 
+        instr_access_excpt : std_logic; 
+        any_trap           : std_logic;
+        csr_access         : std_logic;
+        rs1_adr            : std_logic_vector(4 downto 0);  
+        alu_rslt           : std_logic_vector(31 downto 0);
+        aluop              : std_logic_vector(3 downto 0);
+        exe_fw_rs1_dat     : std_logic_vector(31 downto 0);
+        exe_fw_rs2_dat     : std_logic_vector(31 downto 0);
+        imm32              : std_logic_vector(31 downto 0);
+        rs1_dat            : std_logic_vector(31 downto 0);
+        funct7             : std_logic_vector(6 downto 0);
+        alua_dat           : std_logic_vector(31 downto 0);
+        alub_dat           : std_logic_vector(31 downto 0);
+        csr_wdata          : std_logic_vector(31 downto 0);
+        csr_rdata          : std_logic_vector(31 downto 0);
+        csr                : csr_t; 
     end record;
  
- 
-    type mem_t is record      
-        ctrl   : ctrl_t;
- 
-        rdest : std_logic_vector(4 downto 0);  
-        rs1      : std_logic_vector(4 downto 0);  
-        rs2      : std_logic_vector(4 downto 0); 
-        pc4      : std_logic_vector(31 downto 0);
-        exe_rslt : std_logic_vector(31 downto 0); 
-        rs2_dat  : std_logic_vector(31 downto 0);
+    -- Memory Stage ------------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    type mem_t is record    
+        -- Pipelined into next stage 
+        instret_incr       : std_logic;
+        pc                 : std_logic_vector(31 downto 0);
+        ctrl               : ctrl_t;
+        rdst_adr           : std_logic_vector(4 downto 0);
+        exe_rslt           : std_logic_vector(31 downto 0);
+        
+        -- Not pipelined into next stage 
+        load_adr_ma_excpt  : std_logic;
+        load_access_excpt  : std_logic;
+        store_adr_ma_excpt : std_logic;
+        store_access_excpt : std_logic;
+        rs2_dat            : std_logic_vector(31 downto 0);
+        mem_fw_rs2_dat     : std_logic_vector(31 downto 0);
+        funct3             : std_logic_vector(2 downto 0); 
+        rs2_adr            : std_logic_vector(4 downto 0); 
     end record;
- 
- 
+
+    -- Writeback Stage ---------------------------------------------------------
+    -- -------------------------------------------------------------------------
     type wrb_t is record   
-        ctrl   : ctrl_t;
- 
-        rdst_adr  : std_logic_vector(4 downto 0);  
-        rdst_dat  : std_logic_vector(31 downto 0);  
-        pc4       : std_logic_vector(31 downto 0); 
-        memrd_dat : std_logic_vector(31 downto 0); 
-        exe_rslt  : std_logic_vector(31 downto 0); 
+        instret_incr : std_logic;
+        pc4          : std_logic_vector(31 downto 0); 
+        ctrl         : ctrl_t;
+        rdst_adr     : std_logic_vector(4 downto 0);  
+        exe_rslt     : std_logic_vector(31 downto 0); 
+        rdst_dat     : std_logic_vector(31 downto 0);  
+        memrd_dat    : std_logic_vector(31 downto 0); 
     end record;
     
-    
+    -- Hazard Unit -------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     type haz_t is record 
         -- Forwarding MUX selects 
-        id_fw_a_sel : std_logic_vector(1 downto 0);
-        id_fw_b_sel : std_logic_vector(1 downto 0);
-        ex_fw_a_sel : std_logic_vector(1 downto 0);
-        ex_fw_b_sel : std_logic_vector(1 downto 0);
-        wb_to_mem_fw: std_logic;
+        dec_fw_rs1_sel : std_logic_vector(1 downto 0);
+        dec_fw_rs2_sel : std_logic_vector(1 downto 0);
+        exe_fw_rs1_sel : std_logic_vector(1 downto 0);
+        exe_fw_rs2_sel : std_logic_vector(1 downto 0);
+        mem_fw_rs2_sel : std_logic_vector(1 downto 0);
+        
         -- Hazards 
-        pc_stall    : std_logic;
-        id_stall  : std_logic;
-        ex_stall  : std_logic;
-        mem_stall : std_logic;
-        wb_stall : std_logic;
-        id_flush  : std_logic;
-        ex_flush  : std_logic;
+        ld_hazard    : std_logic;
+        br_ld_hazard: std_logic;
+        jalr_ld_hazard: std_logic;
+        br_hazard: std_logic;
+        jalr_hazard: std_logic;
+        mret_hazard: std_logic;
+
+        -- Piepline register control signals
+        pc_enable: std_logic;
+        dec_enable: std_logic;
+        exe_enable: std_logic;
+        mem_enable: std_logic;
+        wrb_enable: std_logic;
+        dec_flush : std_logic;
+        exe_flush : std_logic;
         mem_flush : std_logic;
-        wb_flush : std_logic;
+        wrb_flush : std_logic;
+
     end record; 
-    
+
+    -- Performance Counters ----------------------------------------------------
+    -- -------------------------------------------------------------------------
+    type cnt_t is record 
+        mcycle: std_logic_vector(31 downto 0); 
+        minstret: std_logic_vector(31 downto 0); 
+    end record; 
+
+
+    -- Control Signal Enumerations ---------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- 
     -- mem2reg mux
-    constant WRB_SEL_EXE_RESULT : std_logic_vector(1 downto 0) := "00";
-    constant WRB_SEL_MEM        : std_logic_vector(1 downto 0) := "01";
-    constant WRB_SEL_PC4        : std_logic_vector(1 downto 0) := "10";
+    constant WRB_SEL_EXE : std_logic_vector(1 downto 0) := "00";
+    constant WRB_SEL_MEM : std_logic_vector(1 downto 0) := "01";
+    constant WRB_SEL_PC4 : std_logic_vector(1 downto 0) := "10";
+    --
     -- alu control ops 
-    constant ALU_CTRL_ADD : std_logic_vector(1 downto 0) := '0';
-    constant ALU_CTRL_ALU : std_logic_vector(1 downto 0) := '1';
+    constant ALU_CTRL_ADD : std_logic := '0';
+    constant ALU_CTRL_ALU : std_logic := '1';
+    --
+    -- alu opcodes
+    constant ALUOP_ADD  : std_logic_vector(3 downto 0) := '0' & F3_SUBADD ;
+    constant ALUOP_SUB  : std_logic_vector(3 downto 0) := '1' & F3_SUBADD ;
+    constant ALUOP_SLL  : std_logic_vector(3 downto 0) := '0' & F3_SLL    ;
+    constant ALUOP_SLT  : std_logic_vector(3 downto 0) := '0' & F3_SLT    ;
+    constant ALUOP_SLTU : std_logic_vector(3 downto 0) := '0' & F3_SLTU   ;
+    constant ALUOP_XOR  : std_logic_vector(3 downto 0) := '0' & F3_XOR    ;
+    constant ALUOP_SRL  : std_logic_vector(3 downto 0) := '0' & F3_SR     ;
+    constant ALUOP_SRA  : std_logic_vector(3 downto 0) := '1' & F3_SR     ;
+    constant ALUOP_OR   : std_logic_vector(3 downto 0) := '0' & F3_OR     ;
+    constant ALUOP_AND  : std_logic_vector(3 downto 0) := '0' & F3_AND    ;
+    --
     -- alusrca mux
     constant ALU_A_RS1  : std_logic_vector(1 downto 0) := "00";
     constant ALU_A_PC   : std_logic_vector(1 downto 0) := "01";
     constant ALU_A_ZERO : std_logic_vector(1 downto 0) := "10";
+    --
     -- alusrcb mux
     constant ALU_B_RS2   : std_logic := '0';
     constant ALU_B_IMM32 : std_logic := '1';
-    -- pc src mux
-    constant PCSRC_PC4 : std_logic := '0';
-    -- imm type 
+    --
+    -- immediate type 
     constant ITYPE : std_logic_vector(2 downto 0) := "000";
     constant STYPE : std_logic_vector(2 downto 0) := "001";
     constant BTYPE : std_logic_vector(2 downto 0) := "010";
     constant UTYPE : std_logic_vector(2 downto 0) := "011";
     constant JTYPE : std_logic_vector(2 downto 0) := "100";
     constant RTYPE : std_logic_vector(2 downto 0) := "101";
-    -- execute unit select
-    constant INT_ALU_UNIT : std_logic_vector(1 downto 0) := "00";
-    constant SYSCSR_UNIT  : std_logic_vector(1 downto 0) := "01";
-    constant FP_UNIT  : std_logic_vector(1 downto 0) := "10";
- 
- 
- 
-    -- ID Forwarding mux select signals 
-    constant ID_TO_ID_FW     : std_logic_vector(1 downto 0) := "00";
-    constant WB_TO_ID_FW     : std_logic_vector(1 downto 0) := "01";
-    constant MEM_TO_ID_FW    : std_logic_vector(1 downto 0) := "10";
-    constant MEM_WB_TO_ID_FW : std_logic_vector(1 downto 0) := "11";
- 
-    -- EXE Forwarding mux select signals  
-    constant EX_TO_EX_FW      : std_logic_vector(1 downto 0) := "00";
-    constant WB_TO_EX_FW      : std_logic_vector(1 downto 0) := "01";
-    constant MEM_TO_EX_FW     : std_logic_vector(1 downto 0) := "10";
-    constant MEM_WB_TO_EX_FW  : std_logic_vector(1 downto 0) := "11";
- 
-    -- MEM forwarding mux select signals 
-    constant MEM_TO_MEM_FW : std_logic := '0';
-    constant WB_TO_MEM_FW  : std_logic := '1';
- 
-
- 
-    type t_instr_decode is (
-        -- RV32I --
-        I_BEQ      ,      
-        I_BNE      ,
-        I_BLT      ,
-        I_BGE      ,
-        I_BLTU     ,
-        I_BGEU     ,
-        I_JALR     ,
-        I_JAL      ,
-        I_LUI      ,
-        I_AUIPC    ,
-        I_ADDI     ,
-        I_SLLI     ,
-        I_SLTI     ,
-        I_SLTIU    ,
-        I_XORI     ,
-        I_SRLI     ,
-        I_SRAI     ,
-        I_ORI      ,
-        I_ANDI     ,
-        I_ADD      ,
-        I_SUB      ,
-        I_SLL      ,
-        I_SLT      ,
-        I_SLTU     ,
-        I_XOR      ,
-        I_SRL      ,
-        I_SRA      ,
-        I_OR       ,
-        I_AND      ,
-        I_LB       ,
-        I_LH       ,
-        I_LW       ,
-        I_LBU      ,
-        I_LHU      ,
-        I_SB       ,
-        I_SH       ,
-        I_SW       ,
-        I_FENCE    ,
-        Z_FENCE_I  ,
-        I_ECALL    ,
-        I_EBREAK   ,
-        -- RV32M --
-        M_MUL      ,
-        M_MULH     ,
-        M_MULHSU   ,
-        M_MULHU    ,
-        M_DIV      ,
-        M_DIVU     ,
-        M_REM      ,
-        M_REMU     ,
-        -- RVA --
-        A_LR_W     ,
-        A_SC_W     ,
-        A_AMOSWAP_W,
-        A_AMOADD_W ,
-        A_AMOXOR_W ,
-        A_AMOAND_W ,
-        A_AMOOR_W  ,
-        A_AMOMIN_W ,
-        A_AMOMAX_W ,
-        A_AMOMINU_W,
-        A_AMOMAXU_W,
-        -- Zcsri --
-        Z_CSRRW    ,
-        Z_CSRRS    ,
-        Z_CSRRC    ,
-        Z_CSRRWI   ,
-        Z_CSRRSI   ,
-        Z_CSRRCI   ,
-        -- RV32F --
-        FLW        ,
-        FSW        ,
-        FMADD_S    ,
-        FMSUB_S    ,
-        FNMSUB_S   ,
-        FNMADD_S   ,
-        FADD_S     ,
-        FSUB_S     ,
-        FMUL_S     ,
-        FDIV_S     ,
-        FSQRT_S    ,
-        FSGNJ_S    ,
-        FSGNJN_S   ,
-        FSGNJX_S   ,
-        FMIN_S     ,
-        FMAX_S     ,
-        FCVT_WS    ,
-        FCVT_WUS   ,
-        FMV_XW     ,
-        FEQ_S      ,
-        FLT_S      ,
-        FLE_S      ,
-        FCLASS_XW  ,
-        FCVT_SW    ,
-        FCVT_SWU   ,
-        FMV_WX     ,
-        -- RV32D --
-        FLD        ,
-        FSD        ,
-        FMADD_D    ,
-        FMSUB_D    ,
-        FNMSUB_D   ,
-        FNMADD_D   ,
-        FADD_D     ,
-        FSUB_D     ,
-        FMUL_D     ,
-        FDIV_D     ,
-        FSQRT_D    ,
-        FSGNJ_D    ,
-        FSGNJN_D   ,
-        FSGNJX_D   ,
-        FMIN_D     ,
-        FMAX_D     ,
-        FCVT_SD    ,
-        FCVT_DS    ,
-        FEQ_D      ,
-        FLT_D      ,
-        FLE_D      ,
-        FCLASD_XW  ,
-        FCVT_WD    ,
-        FCVT_WUD   ,
-        FCVT_DW    ,
-        FCVT_DWU   ,
-  
-        ILLEGAL_INSTR
-    ); 
- 
-    type t_debug is record
-       op : t_instr_decode; 
-    end record t_debug; 
-
-
-
-
-
-
-
-
---   -- probs get rid of these 
---   -- types
---   --------------------------------------------------
---   -- r-type instructions (two operand registers)
---   type t_r_instr is record 
---      opcode : std_logic_vector(6 downto 0); -- instr(6 downto 0)
---      rd     : std_logic_vector(4 downto 0); -- instr(11 downto 7)
---      funct3 : std_logic_vector(2 downto 0); -- instr(14 downto 12)
---      rs1    : std_logic_vector(4 downto 0); -- instr(19 downto 15)
---      rs2    : std_logic_vector(4 downto 0); -- instr(20 downto 24)
---      funct7 : std_logic_vector(6 downto 0); -- instr(31 downto 25)
---   end record t_r_instr; 
-
---   -- i-type instructions (one operand register and one immediate operand)
---   type t_i_instr is record 
---      opcode : std_logic_vector(6  downto 0); -- instr(6 downto 0)
---      rd     : std_logic_vector(4  downto 0); -- instr(11 downto 7)
---      funct3 : std_logic_vector(2  downto 0); -- instr(14 downto 12)
---      rs1    : std_logic_vector(4  downto 0); -- instr(19 downto 15)
---      imm12  : std_logic_vector(11 downto 0); -- instr(31 downto 20)
---   end record t_i_instr; 
-
---   -- sb-type instructions (conditional branches)
---   type t_sb_instr is record 
-
---   end record t_sb_instr; 
-
---   -- u-type instructions (load and add upper immediate) 
---   type t_u_instr is record 
---      opcode : std_logic_vector(6  downto 0); -- instr(6 downto 0)
---      rd     : std_logic_vector(4  downto 0); -- instr(11 downto 7)
---      imm20  : std_logic_vector(19 downto 0); -- instr(31 downto 12)
---   end record t_u_instr; 
-
---   -- uj-type instructions (unconditional jumps)
---   type t_uj_instr is record 
---      opcode : std_logic_vector(6  downto 0); -- instr(6 downto 0)
---      rd     : std_logic_vector(4  downto 0); -- instr(11 downto 7)
---   end record t_uj_instr; 
+    --
+    -- Forwarding mux select signals 
+    constant NO_FW   : std_logic_vector(1 downto 0) := "00";
+    constant MEM_FW  : std_logic_vector(1 downto 0) := "01";
+    constant WRB_FW  : std_logic_vector(1 downto 0) := "10";
 
 end package rv32_pkg; 

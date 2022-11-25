@@ -27,8 +27,8 @@ create_project -force $prj_name ./$prj_name -part $part_num
 
 # Add project source files 
 add_files -fileset sources_1 ./../../../hdl/
-add_files -fileset sources_1 ./../../../../vhdl_lib/memory_generator/hdl/
-add_files -fileset sources_1 ./../../../../vhdl_lib/utils/hdl/gen_utils_pkg.vhd
+add_files -fileset sources_1 ./../../../../memory_generator/hdl/
+add_files -fileset sources_1 ./../../../../utils/hdl/gen_utils_pkg.vhd
 add_files -fileset constrs_1 ./constrs/timing_constrs.xdc
 
 # Set project properties

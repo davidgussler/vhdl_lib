@@ -1,3 +1,15 @@
+-- #############################################################################
+-- #  -<< Machine Time >>-
+-- # ===========================================================================
+-- # Copyright 2022, David Gusser
+-- # ===========================================================================
+-- # File     : wb_mtime.vhd
+-- # Author   : David Gussler - davidnguss@gmail.com 
+-- # Language : VHDL '08
+-- # ===========================================================================
+-- # 
+-- #############################################################################
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -22,7 +34,7 @@ entity wb_mtime is
         o_wbs_rdat : out std_logic_vector(31 downto 0);
 
         -- Mtime Interrupt 
-        o_mt_irq  : in  std_logic
+        o_mt_irq   : out std_logic
     );
 end entity wb_mtime;
 

@@ -34,10 +34,12 @@ entity rv32_top is
         o_sleep     : out std_logic;
         o_debug     : out std_logic;
         i_db_halt   : in  std_logic := '0';
+        i_mtime     : in  std_logic_vector(31 downto 0) := (others=>'0');
 
         -- Interrupts
-        i_mext_irq  : in  std_logic := '0';
-        i_mtime_irq : in  std_logic := '0';
+        i_ms_irq    : in  std_logic := '0'; 
+        i_me_irq    : in  std_logic := '0';
+        i_mt_irq    : in  std_logic := '0';
 
         -- Instruction Interface
         o_wbi_cyc  : out std_logic;
@@ -65,6 +67,9 @@ end entity;
 
 
 architecture rtl of rv32_top is
+    constant RESET_ADDR : std_logic_vector(31 downto 0) := x"0000_0000";
+    constant TRAP_ADDR  : std_logic_vector(31 downto 0) := x"0000_0800";
+
     signal iren     : std_logic; 
     signal iaddr    : std_logic_vector(31 downto 0);
     signal ifence   : std_logic; 
@@ -86,9 +91,9 @@ begin
 
     u_cpu : entity work.rv32_cpu
     generic map (
-        HART_ID    => 0,
-        RESET_ADDR => x"0000_0000",
-        TRAP_ADDR  => x"1C09_0000"
+        G_HART_ID    => x"0000_0000",
+        G_RESET_ADDR => RESET_ADDR,
+        G_TRAP_ADDR  => TRAP_ADDR
     )
     port map (
         -- Clock & Reset
@@ -114,20 +119,20 @@ begin
         i_dstall    => dstall,
         i_derror    => derror,
 
-        -- CPU Control
+        -- Interrupts
+        i_ms_irq    =>  i_ms_irq ,
+        i_me_irq    => i_me_irq ,
+        i_m_irq     => i_mt_irq,
+
+        -- Other
         o_sleep     => o_sleep  ,
         o_debug     => o_debug  ,
         i_db_halt   => i_db_halt,
-
-        -- Interrupts
-        i_msw_irq   => '0',
-        i_mext_irq  => i_mext_irq ,
-        i_mtime_irq => i_mtime_irq
-
+        i_mtime     => i_mtime  
     );
 
 
-    u_memory_subsystem : entity work.rv32_mem
+    u_memory : entity work.rv32_mem
     generic map (
         G_USE_INT_MEM        => G_USE_INT_MEM        ,
         G_INT_MEM_BASE_ADDR  => G_INT_MEM_BASE_ADDR  ,

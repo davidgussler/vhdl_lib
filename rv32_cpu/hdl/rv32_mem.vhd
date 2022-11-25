@@ -35,8 +35,6 @@ use ieee.numeric_std.all;
 
 use work.gen_utils_pkg.all;
 
--- Entity ======================================================================
--- =============================================================================
 entity rv32_mem is
     generic (
         G_USE_INT_MEM       : boolean                       := TRUE; 
@@ -72,8 +70,8 @@ entity rv32_mem is
         i_dwen     : in std_logic;
         i_dsel     : in std_logic_vector(3 downto 0); -- byte select
         i_daddr    : in std_logic_vector(31 downto 0);
-        i_dfence   : in std_logic;
         i_dwdat    : in std_logic_vector(31 downto 0);
+        i_dfence   : in std_logic;
         o_drdat    : out std_logic_vector(31 downto 0);
         o_dstall   : out std_logic;
         o_derror   : out std_logic;
@@ -107,11 +105,7 @@ entity rv32_mem is
 end entity rv32_mem;
 
 
--- Entity ======================================================================
--- =============================================================================
 architecture rtl of rv32_mem is
-
-
 
     -- Represents the width of the address necessary to hold G_INT_MEM_SIZE_BYTES
     -- number of bytes 
@@ -148,9 +142,6 @@ architecture rtl of rv32_mem is
     signal reg_int_dread : std_logic; 
     signal reg_ext_dread : std_logic; 
 
-
--- Architecture ================================================================
--- =============================================================================
 begin
 
 
