@@ -188,6 +188,10 @@ package rv32_testbench_pkg is
     function rv_csrrci (rd : reg_adr_t; imm5 : reg_adr_t; csr_addr : imm12_t) return instr32_t;
     function rv_csrrci (rd : integer; imm5 : integer; csr_addr : integer) return instr32_t;
 
+    function rv_wfi return instr32_t; 
+
+    function rv_mret return instr32_t; 
+
 
 end package;
 
@@ -833,7 +837,10 @@ package body rv32_testbench_pkg is
         variable instr : instr32_t;
     begin
         instr(RANGE_OPCODE) := OPCODE_SYSTEM;
-        instr(31 downto 7)  := (others=>'0');
+        instr(RANGE_FUNCT3) := F3_ENV;
+        instr(RANGE_RD)     := (others=>'0');
+        instr(RANGE_RS1)    := (others=>'0');
+        instr(RANGE_IMM_I)  := F12_ECALL;
         return instr; 
     end function; 
 
@@ -844,7 +851,10 @@ package body rv32_testbench_pkg is
         variable instr : instr32_t;
     begin
         instr(RANGE_OPCODE) := OPCODE_SYSTEM;
-        instr(31 downto 7)  := x"0010_00" & '0';
+        instr(RANGE_FUNCT3) := F3_ENV;
+        instr(RANGE_RD)     := (others=>'0');
+        instr(RANGE_RS1)    := (others=>'0');
+        instr(RANGE_IMM_I)  := F12_EBREAK;
         return instr; 
     end function; 
 
@@ -953,7 +963,31 @@ package body rv32_testbench_pkg is
     end function; 
 
 
+    function rv_wfi
+        return instr32_t 
+    is
+        variable instr : instr32_t;
+    begin
+        instr(RANGE_OPCODE) := OPCODE_SYSTEM;
+        instr(RANGE_FUNCT3) := F3_ENV;
+        instr(RANGE_RD)     := (others=>'0');
+        instr(RANGE_RS1)    := (others=>'0');
+        instr(RANGE_IMM_I)  := F12_WFI;
+        return instr; 
+    end function; 
 
+    function rv_mret
+        return instr32_t 
+    is
+        variable instr : instr32_t;
+    begin
+        instr(RANGE_OPCODE) := OPCODE_SYSTEM;
+        instr(RANGE_FUNCT3) := F3_ENV;
+        instr(RANGE_RD)     := (others=>'0');
+        instr(RANGE_RS1)    := (others=>'0');
+        instr(RANGE_IMM_I)  := F12_MRET;
+        return instr; 
+    end function; 
 
     -- Others TBD when and if appropriate
 

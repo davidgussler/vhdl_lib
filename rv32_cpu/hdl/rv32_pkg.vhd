@@ -536,4 +536,7 @@ package rv32_pkg is
     constant MEM_FW  : std_logic_vector(1 downto 0) := "01";
     constant WRB_FW  : std_logic_vector(1 downto 0) := "10";
 
+    constant NOP_INSTR : std_logic_vector(31 downto 0) := 
+            x"000" & b"00000" & b"00000" & F3_SUBADD & OPCODE_ALUI;
+
 end package rv32_pkg; 

@@ -499,7 +499,7 @@ begin
             when others => dec.dec_fw_rs1_dat <= dec.rs1_dat;
         end case; 
 
-        case (haz.dec_fw_rs1_sel) is 
+        case (haz.dec_fw_rs2_sel) is 
             when WRB_FW => dec.dec_fw_rs2_dat <= wrb.rdst_dat;
             when MEM_FW => dec.dec_fw_rs2_dat <= mem.exe_rslt;
             when others => dec.dec_fw_rs2_dat <= dec.rs2_dat;

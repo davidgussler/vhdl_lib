@@ -5,6 +5,7 @@ library vunit_lib;
 context vunit_lib.vunit_context;
 context vunit_lib.vc_context;
 use work.gen_utils_pkg.all;
+use work.rv32_pkg.all;
 use work.rv32_testbench_pkg.all;
 library neorv32;
 use neorv32.neorv32_package.all;
@@ -87,7 +88,15 @@ architecture tb of rv32_cpu_tb is
     constant mem2_buff     : buffer_t := allocate(memory_golden, NUM_BYTES);
 
 
-    -- Simple test programs
+    -- Simple test programs ----------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- Simple programs for initial debug and testing. Will move to testing with 
+    -- C-code once these basic assembly simulations pass. It is simpler to use
+    -- this framework for testing individual instructions or small code chunks.
+    -- It will make sense to start testing with C when I'm ready to move to larger
+    -- programs. This is just nice because it lets us stay in the VHDL world 
+    -- without having to rely on any external toolchains
+
     constant ITYPE_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
         rv_addi(1, 0, 1),  -- 1
         rv_addi(2, 0, 2),  -- 2
@@ -101,6 +110,8 @@ architecture tb of rv32_cpu_tb is
         rv_slli(10, 2, 4), -- 32
         rv_srli(11, 2, 1), -- 1
         rv_srai(12, 2, 2), -- 0
+        rv_lui(13, 29),
+        rv_auipc(14, -23),
 
         rv_sw (0, 1,  1024),
         rv_sw (0, 2,  1024+1*4), 
@@ -112,14 +123,231 @@ architecture tb of rv32_cpu_tb is
         rv_sw (0, 8,  1024+7*4), 
         rv_sw (0, 9,  1024+8*4), 
         rv_sw (0, 10, 1024+9*4), 
-        rv_sw (0, 11, 1024+10*4) ,
-        rv_sw (0, 12, 1024+11*4) ,
+        rv_sw (0, 11, 1024+10*4),
+        rv_sw (0, 12, 1024+11*4),
+        rv_sw (0, 13, 1024+12*4),
+        rv_sw (0, 14, 1024+13*4),
+
+        rv_jal (0, 0),
 
         others => (others=>'0')
     );
 
 
+    constant RTYPE_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        rv_addi(1, 0, 4), 
+        rv_addi(2, 0, -13), 
+        rv_sub(3, 1, 2),
+        rv_sll(1, 3, 2),
+        rv_slt(1, 3, 2),
+        rv_sltu(4, 1, 3),
+        rv_xor(5, 1, 2),
+        rv_srl(2, 3, 2),
+        rv_sra(2, 3, 2),
+        rv_or(6,5,1),
+        rv_and(7,6,4),
 
+        rv_sw (0, 1,  1024),
+        rv_sw (0, 2,  1024+1*4), 
+        rv_sw (0, 3,  1024+2*4), 
+        rv_sw (0, 4,  1024+3*4), 
+        rv_sw (0, 5,  1024+4*4), 
+        rv_sw (0, 6,  1024+5*4), 
+        rv_sw (0, 7,  1024+6*4), 
+        
+        rv_jal (0, 0),
+    
+        others => (others=>'0')
+    );
+
+
+    constant BRANCH_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        rv_addi(1, 0, 14), 
+        rv_addi(2, 0, 25), 
+        rv_addi(3, 0, -36), 
+
+        rv_beq(2, 2, 8),
+        rv_addi(4, 0, 1), 
+        rv_beq(2, 3, 8), 
+        rv_addi(5, 0, 1), 
+
+        rv_bne(2, 3, 8),
+        rv_addi(6, 0, 1),
+        rv_bne(1, 1, 8), 
+        rv_addi(7, 0, 1),
+
+        rv_blt(3, 2, 8),
+        rv_addi(8, 0, 1), 
+        rv_blt(2, 3, 8), 
+        rv_addi(9, 0, 1), 
+
+        rv_bge(2, 1, 8),
+        rv_addi(10, 0, 1), 
+        rv_bge(1, 2, 8), 
+        rv_addi(11, 0, 1), 
+
+        rv_bltu(3, 2, 8),
+        rv_addi(12, 0, 1), 
+        rv_bltu(2, 3, 8), 
+        rv_addi(13, 0, 1), 
+
+        rv_bgeu(2, 1, 8),
+        rv_addi(14, 0, 1), 
+        rv_bgeu(1, 2, 8), 
+        rv_addi(15, 0, 1), 
+
+        rv_sw (0, 1,  1024),
+        rv_sw (0, 2,  1024+1*4), 
+        rv_sw (0, 3,  1024+2*4), 
+        rv_sw (0, 4,  1024+3*4), 
+        rv_sw (0, 5,  1024+4*4), 
+        rv_sw (0, 6,  1024+5*4), 
+        rv_sw (0, 7,  1024+6*4), 
+        rv_sw (0, 8,  1024+7*4), 
+        rv_sw (0, 9,  1024+8*4), 
+        rv_sw (0, 10, 1024+9*4), 
+        rv_sw (0, 11, 1024+10*4), 
+        rv_sw (0, 12, 1024+11*4), 
+        rv_sw (0, 13, 1024+12*4), 
+        rv_sw (0, 14, 1024+13*4), 
+
+        rv_jal (0, 0),
+    
+        others => (others=>'0')
+    );
+
+
+    constant JALR_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        0  => rv_addi(1, 0, 4), 
+
+        1  => rv_addi(5, 0, 5),
+        2  => rv_jalr(3, 1, 1000-4),
+        3  => rv_addi(5, 0, 6),
+        4  => rv_sw(0, 5, 1024+1*4),
+
+        5  => rv_jal (0, 0),
+
+        1000/4 => rv_sw(0, 5, 1024),
+        1004/4 => rv_jalr(0, 3, 0),
+
+        others => (others=>'0')
+    );
+
+
+    constant CSR_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        rv_addi(1, 0, 444),
+        rv_addi(2, 0, 4), 
+
+        rv_csrrw(3, 1, to_integer(unsigned(CSR_MEPC))),
+        rv_csrrc(4, 2, to_integer(unsigned(CSR_MEPC))),
+        rv_csrrs(4, 0, to_integer(unsigned(CSR_MEPC))),
+
+        rv_csrrwi(5, 12, to_integer(unsigned(CSR_MEPC))),
+        rv_csrrci(6, 4, to_integer(unsigned(CSR_MEPC))),
+        rv_csrrsi(7, 0, to_integer(unsigned(CSR_MEPC))),
+
+        rv_sw (0, 1,  1024),
+        rv_sw (0, 2,  1024+1*4), 
+        rv_sw (0, 3,  1024+2*4), 
+        rv_sw (0, 4,  1024+3*4), 
+        rv_sw (0, 5,  1024+4*4), 
+        rv_sw (0, 6,  1024+5*4), 
+        rv_sw (0, 7,  1024+6*4), 
+
+        rv_jal (0, 0),
+
+        others => (others=>'0')
+    );
+
+
+    constant LOAD_STORE_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        0  => rv_addi(1, 0, 1000),
+        1  => rv_lw(2, 1, 0),
+        2  => rv_lh(3, 1, 4),
+        3  => rv_lb(4, 1, 0),
+        4  => rv_lw(5, 1, 8),
+        5  => rv_lhu(6, 1, 8),
+        6  => rv_lbu(7, 1, 8),
+
+        7  => rv_addi(8, 0, 1024),
+        8  => rv_sw(8, 1, 0),
+        9  => rv_sw(8, 2, 4*1),
+        10 => rv_sw(8, 3, 4*2),
+        11 => rv_sw(8, 4, 4*3),
+        12 => rv_sw(8, 5, 4*4),
+        13 => rv_sw(8, 6, 4*5),
+        14 => rv_sw(8, 7, 4*6),
+
+        15 => rv_sh(8, 1, 4*7),
+        16 => rv_sh(8, 2, 4*8),
+        17 => rv_sh(8, 3, 4*9),
+        18 => rv_sh(8, 4, 4*10),
+        19 => rv_sh(8, 5, 4*11),
+        20 => rv_sh(8, 6, 4*12),
+        21 => rv_sh(8, 7, 4*13),
+
+        22 => rv_sb(8, 1, 4*14),
+        23 => rv_sb(8, 2, 4*15),
+        24 => rv_sb(8, 3, 4*16),
+        25 => rv_sb(8, 4, 4*17),
+        26 => rv_sb(8, 5, 4*18),
+        27 => rv_sb(8, 6, 4*19),
+        28 => rv_sb(8, 7, 4*20),
+
+        29 => rv_jal (0, 0),
+
+        -- data
+        1000/4 => x"1234_5678",
+        1004/4 => x"9ABC_DEF0",
+        1008/4 => x"F101_DEFA",
+
+        others => (others=>'0')
+    );
+
+
+    constant EXCEPTION_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        0  => rv_addi(1, 0, 3), 
+        1  => rv_addi(2, 0, 4),  
+        2  => rv_addi(8, 0, 1024),
+        3  => rv_ecall,
+
+        4  => rv_addi(1, 0, 5), 
+        5  => rv_addi(2, 0, 6),
+        6  => rv_addi(8, 0, 1024+8),
+        7  => rv_ebreak,
+
+        8  => rv_addi(1, 0, 7), 
+        9  => rv_addi(2, 0, 8),
+        10 => rv_addi(8, 0, 1024+16),
+        11 => rv_sw(8, 1, 0),
+        12 => rv_sw(8, 2, 4), 
+
+        13 => rv_jal (0, 0),
+
+        -- ecall/ebreak irq handler
+        (to_integer(unsigned(TRAP_ADDR)))/4     => rv_sw(8, 1, 0),
+        (to_integer(unsigned(TRAP_ADDR))+4)/4   => rv_sw(8, 2, 4), 
+        (to_integer(unsigned(TRAP_ADDR))+4*2)/4 => rv_csrrci(15, 0, to_integer(unsigned(CSR_MEPC))),
+        (to_integer(unsigned(TRAP_ADDR))+4*3)/4 => rv_addi(15, 15, 4),  
+        (to_integer(unsigned(TRAP_ADDR))+4*4)/4 => rv_csrrw(0, 15, to_integer(unsigned(CSR_MEPC))),
+        (to_integer(unsigned(TRAP_ADDR))+4*5)/4 => rv_mret,
+
+        others => (others=>'0')
+    );
+
+
+    -- Generate a random sequence of instructions
+    -- TODO: 
+    constant RANDOM_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        rv_addi(10, 0, 223),
+
+        rv_jal (0, 0),
+
+        others => (others=>'0')
+    );
+
+    -- Memory Procedures -------------------------------------------------------
+    -- -------------------------------------------------------------------------
     procedure mem_init (memory : memory_t; program : slv_array_t) is
     begin
         for i in 0 to MEM_DEPTH-1 loop
@@ -157,8 +385,7 @@ begin
     begin
         test_runner_setup(runner, runner_cfg);
         while test_suite loop
-            if run("test_0") then
-
+            if run("i-type") then
                 info("Loading i-type test program into memories...");
                 mem_init(memory_dut, ITYPE_TEST); 
                 mem_init(memory_golden, ITYPE_TEST); 
@@ -171,8 +398,144 @@ begin
                 wait for 500 * C_CLK_PERIOD;
 
                 info("Checking results...");
-                --mem_check(memory_dut, memory_golden);
-                mem_print(memory_golden);
+                mem_check(memory_dut, memory_golden);
+
+                info("I-Type Test Success!");
+
+
+
+            elsif run("r-type") then
+                info("Loading r-type test program into memories...");
+                mem_init(memory_dut, RTYPE_TEST); 
+                mem_init(memory_golden, RTYPE_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("R-Type Test Success!");
+
+
+
+            elsif run("branch") then
+                info("Loading branch test program into memories...");
+                mem_init(memory_dut, BRANCH_TEST); 
+                mem_init(memory_golden, BRANCH_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("Branch Test Success!");
+            
+
+
+            elsif run("jalr") then
+                info("Loading jalr test program into memories...");
+                mem_init(memory_dut, JALR_TEST); 
+                mem_init(memory_golden, JALR_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("JALR Test Success!");
+
+
+
+            elsif run("csr") then
+                info("Loading csr test program into memories...");
+                mem_init(memory_dut, CSR_TEST); 
+                mem_init(memory_golden, CSR_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("CSR Test Success!");
+
+
+
+            elsif run("load_store") then
+                info("Loading load/store test program into memories...");
+                mem_init(memory_dut, LOAD_STORE_TEST); 
+                mem_init(memory_golden, LOAD_STORE_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("Load/Store Test Success!");
+
+
+            
+            elsif run("exception") then
+                info("Loading exception test program into memories...");
+                mem_init(memory_dut, EXCEPTION_TEST); 
+                mem_init(memory_golden, EXCEPTION_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("Exception Test Success!");
+
+
+
+            elsif run("random") then
+                info("Loading random instruction sequence into memories...");
+                mem_init(memory_dut, RANDOM_TEST); 
+                mem_init(memory_golden, RANDOM_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("Random Instrunction Sequence Test Success!");
+
+
             end if;
         end loop;
 
@@ -301,7 +664,7 @@ begin
         -- General --
         HW_THREAD_ID                 => to_integer(unsigned(HART_ID)),                 -- hardware thread id
         CPU_BOOT_ADDR                => RESET_ADDR,              -- cpu boot address
-        CPU_DEBUG_ADDR               => RESET_ADDR,                    -- cpu debug mode start address
+        CPU_DEBUG_ADDR               => TRAP_ADDR,                    -- cpu debug mode start address
         -- RISC-V CPU Extensions --
         CPU_EXTENSION_RISCV_B        => FALSE,        -- implement bit-manipulation extension?
         CPU_EXTENSION_RISCV_C        => FALSE,        -- implement compressed extension?
@@ -415,63 +778,47 @@ begin
 
     -- Golden Model Memory -----------------------------------------------------
     -- -------------------------------------------------------------------------
-    np_golden_iread : process
+    np_golden_read : process
         variable v_dat : std_logic_vector(31 downto 0);
     begin
-        wait until rising_edge(clk) and neorv.iren = '1';
-        v_dat := read_word(memory_golden, to_integer(unsigned(neorv.iaddr(ADDR_WIDTH-1 downto 0))), 4);
-        neorv.irdat <= v_dat;
+        wait until rising_edge(clk) and golden.ren = '1';
+        v_dat := read_word(memory_golden, to_integer(unsigned(golden.addr(ADDR_WIDTH-1 downto 0))), 4);
+        golden.rdat <= v_dat;
     end process;
 
-    np_golden_dread : process
-        variable v_dat : std_logic_vector(31 downto 0);
+    np_golden_write : process
     begin
-        wait until rising_edge(clk) and neorv.dren = '1';
-        v_dat := read_word(memory_golden, to_integer(unsigned(neorv.daddr(ADDR_WIDTH-1 downto 0))), 4);
-        neorv.drdat <= v_dat;
-    end process;
-
-    np_golden_dwrite : process
-    begin
-        wait until rising_edge(clk) and neorv.dwen = '1';
-        if (neorv.dben(0)) then 
-            write_word(memory_golden, to_integer(unsigned(neorv.daddr(ADDR_WIDTH-1 downto 0)) + 0), neorv.dwdat(7 downto 0));
+        wait until rising_edge(clk) and golden.wen = '1';
+        if (golden.ben(0)) then 
+            write_word(memory_golden, to_integer(unsigned(golden.addr(ADDR_WIDTH-1 downto 0)) + 0), golden.wdat(7 downto 0));
         end if; 
-        if (neorv.dben(1)) then 
-            write_word(memory_golden, to_integer(unsigned(neorv.daddr(ADDR_WIDTH-1 downto 0)) + 1), neorv.dwdat(15 downto 8));
+        if (golden.ben(1)) then 
+            write_word(memory_golden, to_integer(unsigned(golden.addr(ADDR_WIDTH-1 downto 0)) + 1), golden.wdat(15 downto 8));
         end if; 
-        if (neorv.dben(2)) then 
-            write_word(memory_golden, to_integer(unsigned(neorv.daddr(ADDR_WIDTH-1 downto 0)) + 2), neorv.dwdat(23 downto 16));
+        if (golden.ben(2)) then 
+            write_word(memory_golden, to_integer(unsigned(golden.addr(ADDR_WIDTH-1 downto 0)) + 2), golden.wdat(23 downto 16));
         end if; 
-        if (neorv.dben(3)) then 
-            write_word(memory_golden, to_integer(unsigned(neorv.daddr(ADDR_WIDTH-1 downto 0)) + 3), neorv.dwdat(31 downto 24));
+        if (golden.ben(3)) then 
+            write_word(memory_golden, to_integer(unsigned(golden.addr(ADDR_WIDTH-1 downto 0)) + 3), golden.wdat(31 downto 24));
         end if; 
     end process;
 
     sp_golden_ack : process (clk)
     begin
         if rising_edge(clk) then
-            if (rst) then
-                neorv.iack <= '0'; 
-                neorv.dack <= '0'; 
+            if (rst) then 
+                golden.ack <= '0'; 
             else 
-                if (neorv.iren) then
-                    neorv.iack <= '1';
+                if (golden.ren or golden.wen) then
+                    golden.ack <= '1';
                 else 
-                    neorv.iack <= '0';
-                end if; 
-
-                if (neorv.dren) then
-                    neorv.dack <= '1';
-                else 
-                    neorv.dack <= '0';
+                    golden.ack <= '0';
                 end if; 
             end if; 
         end if;
     end process;
 
-    neorv.ierr <= '0';
-    neorv.derr <= '0';
+    golden.err <= '0';
 
 
     -- Golden Model Interrupts -------------------------------------------------
