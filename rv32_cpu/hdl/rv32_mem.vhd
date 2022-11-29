@@ -60,7 +60,7 @@ entity rv32_mem is
         -- Instruction port from cpu
         i_iren     : in std_logic;
         i_iaddr    : in std_logic_vector(31 downto 0);
-        i_ifence   : in std_logic;
+        i_fencei   : in std_logic;
         o_irdat    : out std_logic_vector(31 downto 0);
         o_istall   : out std_logic;
         o_ierror   : out std_logic;
@@ -71,7 +71,7 @@ entity rv32_mem is
         i_dsel     : in std_logic_vector(3 downto 0); -- byte select
         i_daddr    : in std_logic_vector(31 downto 0);
         i_dwdat    : in std_logic_vector(31 downto 0);
-        i_dfence   : in std_logic;
+        i_fence    : in std_logic;
         o_drdat    : out std_logic_vector(31 downto 0);
         o_dstall   : out std_logic;
         o_derror   : out std_logic;
@@ -314,7 +314,6 @@ begin
         i_wb_err  => i_wbd_err, 
         i_wb_rdat => i_wbd_rdat
     );
-
 
 end architecture;
 

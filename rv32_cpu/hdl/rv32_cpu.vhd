@@ -80,6 +80,12 @@ architecture rtl of rv32_cpu is
    signal cnt : cnt_t; 
 
 begin
+    --TODO: implement this when I add stalling on WFI instruction 
+    o_sleep <= '0'; 
+    
+    -- TODO: Eventualy maybe add a debugger. This is low priority. 
+    o_debug <= '0'; 
+
     -- =========================================================================
     -- Fetch Stage =============================================================
     -- =========================================================================
@@ -123,7 +129,7 @@ begin
     fet.trap_taken <= fet.ms_irq_pulse or fet.mt_irq_pulse or fet.me_irq_pulse or 
             mem.load_adr_ma_excpt or mem.load_access_excpt or 
             mem.store_adr_ma_excpt or mem.store_access_excpt or 
-            dec.ctrl.illegal or dec.ecall_excpt or dec.ebreak_excpt or 
+            dec.illeg_instr_excpt or dec.ecall_excpt or dec.ebreak_excpt or 
             fet.instr_adr_ma_excpt or fet.instr_access_excpt; 
 
 
@@ -134,12 +140,9 @@ begin
     begin
         if (rising_edge(i_clk)) then
             if (i_rst) then
-                o_iren <= '0'; 
-                fet.instret_incr <= '0'; 
+                fet.instret_incr <= '1'; 
                 fet.pc <= G_RESET_ADDR(31 downto 2) & b"00";
             elsif (haz.pc_enable) then
-                -- Only read from instruction memory when PC is enabled 
-                o_iren <= '1'; 
 
                 -- instret_incr increments the instructions retired performance counter
                 -- The value starts off as '1' for an enabled fetch, but it can get
@@ -159,15 +162,14 @@ begin
                 else 
                     fet.pc <= std_logic_vector(unsigned(fet.pc) + 4);  
                 end if;
-            else
-                o_iren <= '0'; 
             end if;
         end if; 
     end process;
     
-    fet.instr_adr_ma_excpt <= fet.pc(0) or fet.pc(1);
-    fet.instr_access_excpt <= i_ierror; 
+    fet.instr_adr_ma_excpt <= (fet.pc(0) or fet.pc(1)) and o_iren;
+    fet.instr_access_excpt <= i_ierror and o_iren; 
 
+    o_iren <= '1'; 
     o_iaddr   <= fet.pc;
     dec.instr <= i_irdat;
 
@@ -446,6 +448,9 @@ begin
                 dec.ctrl.illegal  <= '1'; 
         end case; 
     end process;
+
+    -- Illegal instruction exception
+    dec.illeg_instr_excpt <= dec.ctrl.illegal and dec.instret_incr;
  
 
     -- Construct the 32-bit signed immediate
@@ -588,16 +593,17 @@ begin
                 exe.me_irq_pulse       <= '0'; 
                 exe.instr_adr_ma_excpt <= '0'; 
                 exe.instr_access_excpt <= '0'; 
+                exe.illeg_instr_excpt  <= '0'; 
                 exe.ecall_excpt        <= '0'; 
                 exe.ebreak_excpt       <= '0'; 
                 exe.ctrl.reg_wr        <= '0'; 
                 exe.ctrl.wrb_sel       <= (others=>'-');
                 exe.ctrl.mem_wr        <= '0'; 
                 exe.ctrl.mem_rd        <= '0'; 
-                exe.ctrl.alu_ctrl      <= (others=>'-');
+                exe.ctrl.alu_ctrl      <= '-';
                 exe.ctrl.alua_sel      <= (others=>'-');
-                exe.ctrl.alub_sel      <= (others=>'-');
-                exe.ctrl.illegal       <= '0'; 
+                exe.ctrl.alub_sel      <= '-';
+                exe.csr_access         <= '0';
                 exe.pc                 <= (others=>'-');
                 exe.rs1_adr            <= (others=>'-');
                 exe.rs2_adr            <= (others=>'-');
@@ -607,6 +613,7 @@ begin
                 exe.imm32              <= (others=>'-');
                 exe.funct3             <= (others=>'-');
                 exe.funct7             <= (others=>'-');
+                exe.is_rtype           <= '-';
             elsif (haz.exe_enable) then
                 exe.instret_incr       <= dec.instret_incr; 
                 exe.ms_irq_pulse       <= dec.ms_irq_pulse;
@@ -614,6 +621,7 @@ begin
                 exe.me_irq_pulse       <= dec.me_irq_pulse;
                 exe.instr_adr_ma_excpt <= dec.instr_adr_ma_excpt;
                 exe.instr_access_excpt <= dec.instr_access_excpt;
+                exe.illeg_instr_excpt  <= dec.illeg_instr_excpt;
                 exe.ecall_excpt        <= dec.ecall_excpt;
                 exe.ebreak_excpt       <= dec.ebreak_excpt;
                 exe.ctrl.reg_wr        <= dec.ctrl.reg_wr;
@@ -623,16 +631,18 @@ begin
                 exe.ctrl.alu_ctrl      <= dec.ctrl.alu_ctrl;
                 exe.ctrl.alua_sel      <= dec.ctrl.alua_sel;
                 exe.ctrl.alub_sel      <= dec.ctrl.alub_sel;
-                exe.ctrl.illegal       <= dec.ctrl.illegal;
+                exe.csr_access         <= dec.csr_access;
                 exe.pc                 <= dec.pc;
                 exe.rs1_adr            <= dec.rs1_adr;
                 exe.rs2_adr            <= dec.rs2_adr;
                 exe.rdst_adr           <= dec.rdst_adr;
-                exe.rs1_dat            <= dec.rs1_dat;
-                exe.rs2_dat            <= dec.rs2_dat;
+                exe.rs1_dat            <= dec.dec_fw_rs1_dat;
+                exe.rs2_dat            <= dec.dec_fw_rs2_dat;
                 exe.imm32              <= dec.imm32; 
                 exe.funct3             <= dec.funct3;
                 exe.funct7             <= dec.funct7;
+                -- Is this an R-Type instruction? Used for making alu opcode.
+                exe.is_rtype <= '1' when dec.ctrl.imm_type = RTYPE else '0';
             end if; 
         end if;
     end process;
@@ -678,9 +688,34 @@ begin
 
         -- Build the aluop
         case (exe.ctrl.alu_ctrl) is 
-            when ALU_CTRL_ADD  => exe.aluop <= ALUOP_ADD;  
-            when ALU_CTRL_ALU  => exe.aluop <= exe.funct7(5) & exe.funct3; 
-            when others       => exe.aluop <= (others=>'-'); 
+            when ALU_CTRL_ADD => 
+                exe.aluop <= ALUOP_ADD;  
+
+            when ALU_CTRL_ALU => 
+                case (exe.funct3) is
+                    when F3_SUBADD =>
+                        if (exe.is_rtype and exe.funct7(5)) then
+                            exe.aluop <= ALUOP_SUB;
+                        else
+                            exe.aluop <= ALUOP_ADD;
+                        end if;
+
+                    when F3_SR =>
+                        if (exe.funct7(5)) then
+                            exe.aluop <= ALUOP_SRA;
+                        else
+                            exe.aluop <= ALUOP_SRL;
+                        end if; 
+
+                    when F3_SLL => exe.aluop <= ALUOP_SLL ;
+                    when F3_SLT => exe.aluop <= ALUOP_SLT ;  
+                    when F3_SLTU=> exe.aluop <= ALUOP_SLTU;  
+                    when F3_XOR => exe.aluop <= ALUOP_XOR ;   
+                    when F3_OR  => exe.aluop <= ALUOP_OR  ; 
+                    when F3_AND => exe.aluop <= ALUOP_AND ; 
+                    when others => exe.aluop <= (others=>'-'); 
+                end case;
+            when others => exe.aluop <= (others=>'-'); 
         end case; 
 
         -- ALU
@@ -900,7 +935,6 @@ begin
                         exe.csr.mcause_code      <= TRAP_MECALL; --11
                         exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
                     end if; 
-
                 end if; 
             end if; 
         end if;
@@ -953,7 +987,7 @@ begin
                     exe.csr_rdata <= exe.csr.minstret; 
 
                 when CSR_MEPC =>
-                    exe.csr_rdata <= exe.csr.mepc;
+                    exe.csr_rdata(31 downto 2) <= exe.csr.mepc(31 downto 2);
 
                 when CSR_MCAUSE =>
                     exe.csr_rdata(INTR) <= exe.csr.mcause_intr;
@@ -996,7 +1030,7 @@ begin
                 mem.pc           <= exe.pc; 
                 mem.rs2_adr      <= exe.rs2_adr;
                 mem.rdst_adr     <= exe.rdst_adr; 
-                mem.rs2_dat      <= exe.rs2_dat;
+                mem.rs2_dat      <= exe.exe_fw_rs2_dat;
                 mem.funct3       <= exe.funct3; 
                 mem.exe_rslt     <= exe.exe_rslt;
             end if; 
@@ -1291,7 +1325,7 @@ begin
         -- 1. exception causing instruction 
         -- 2. speculatively fethed instruction (flushed)
         -- 3. trap handler base address instruction 
-        if (dec.ctrl.illegal or dec.ecall_excpt or dec.ebreak_excpt or 
+        if (dec.illeg_instr_excpt or dec.ecall_excpt or dec.ebreak_excpt or 
                     dec.mret or dec.fence or dec.fencei or dec.br_taken) then
             haz.dec_flush <= '1';
         end if; 
@@ -1337,7 +1371,7 @@ begin
     process (i_clk)
     begin
         if rising_edge(i_clk) then
-            cnt.mcycle <= std_logic_vector(unsigned(exe.csr.mcycle + 1));
+            cnt.mcycle <= std_logic_vector(unsigned(exe.csr.mcycle) + 1);
         end if;
     end process;
     
@@ -1347,7 +1381,7 @@ begin
     begin
         if rising_edge(i_clk) then
             if (wrb.instret_incr) then
-                cnt.minstret <= std_logic_vector(unsigned(exe.csr.minstret + 1));
+                cnt.minstret <= std_logic_vector(unsigned(exe.csr.minstret) + 1);
             end if; 
         end if;
     end process;

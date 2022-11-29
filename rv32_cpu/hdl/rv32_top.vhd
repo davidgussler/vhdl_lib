@@ -72,7 +72,7 @@ architecture rtl of rv32_top is
 
     signal iren     : std_logic; 
     signal iaddr    : std_logic_vector(31 downto 0);
-    signal ifence   : std_logic; 
+    signal fencei   : std_logic; 
     signal irdat    : std_logic_vector(31 downto 0);
     signal istall   : std_logic; 
     signal ierror   : std_logic; 
@@ -81,7 +81,7 @@ architecture rtl of rv32_top is
     signal dwen     : std_logic; 
     signal dben     : std_logic_vector(3 downto 0);
     signal daddr    : std_logic_vector(31 downto 0);
-    signal dfence   : std_logic; 
+    signal fence    : std_logic; 
     signal dwdat    : std_logic_vector(31 downto 0);
     signal drdat    : std_logic_vector(31 downto 0);
     signal dstall   : std_logic; 
@@ -103,7 +103,7 @@ begin
         -- Instruction  Interface 
         o_iren      => iren  ,
         o_iaddr     => iaddr ,
-        o_ifence    => ifence,
+        o_fencei    => fencei,
         i_irdat     => irdat ,
         i_istall    => istall,
         i_ierror    => ierror,
@@ -113,16 +113,16 @@ begin
         o_dwen      => dwen  ,
         o_dben      => dben  ,
         o_daddr     => daddr ,
-        o_dfence    => dfence,
+        o_fence     => fence,
         o_dwdat     => dwdat ,
         i_drdat     => drdat ,
         i_dstall    => dstall,
         i_derror    => derror,
 
         -- Interrupts
-        i_ms_irq    =>  i_ms_irq ,
+        i_ms_irq    => i_ms_irq ,
         i_me_irq    => i_me_irq ,
-        i_m_irq     => i_mt_irq,
+        i_mt_irq    => i_mt_irq,
 
         -- Other
         o_sleep     => o_sleep  ,
@@ -147,7 +147,7 @@ begin
         -- Instruction port from cpu
         i_iren     => iren  ,
         i_iaddr    => iaddr ,
-        i_ifence   => ifence,
+        i_fencei   => fencei,
         o_irdat    => irdat ,
         o_istall   => istall,
         o_ierror   => ierror,
@@ -157,7 +157,7 @@ begin
         i_dwen     => dwen  ,
         i_dsel     => dben  ,
         i_daddr    => daddr ,
-        i_dfence   => dfence,
+        i_fence   => fence,
         i_dwdat    => dwdat ,
         o_drdat    => drdat ,
         o_dstall   => dstall,

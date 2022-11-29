@@ -18,3 +18,10 @@ RISC V implementation
 * doesnt trap access of CSRs that dont exit
 * doesnt trap writes of RO CSRs, instead it does nothing
 * only supports up to 32-bit performance counters rather than 64
+
+
+## Notes
+
+Something to consider: Move csr writes to writeback stage.
+Forwarding should still work. 
+I think hardware and software writes would both happen at that stage

@@ -1,0 +1,3 @@
+[submodule "rv32_cpu/sim/golden_model/neorv32"]
+	path = rv32_cpu/sim/golden_model/neorv32
+	url = https://github.com/stnolting/neorv32

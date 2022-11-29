@@ -259,18 +259,18 @@ package rv32_pkg is
 
     -- Mcause Trap Codes -------------------------------------------------------
     -- -------------------------------------------------------------------------
-    constant TRAP_MEI_IRQ  : natural := 11; -- External Interrupt 
-    constant TRAP_MSI_IRQ  : natural := 3;  -- Software Interrupt
-    constant TRAP_MTI_IRQ  : natural := 7;  -- Timer Interrupt 
-    constant TRAP_IMA      : natural := 0;  -- Instruction Misaligned Address Exception
-    constant TRAP_IACC     : natural := 1;  -- Instruction Access Error Exception
-    constant TRAP_ILL_INTR : natural := 2;  -- Illegal Instruction Exception
-    constant TRAP_EBREAK   : natural := 3;  -- Ebreak Exception
-    constant TRAP_LMA      : natural := 4;  -- Load Misaligned Address Exception
-    constant TRAP_LACC     : natural := 5;  -- Load Access Exception 
-    constant TRAP_SMA      : natural := 6;  -- Store Misaligned Address Exception
-    constant TRAP_SACC     : natural := 7;  -- Store Access Exception
-    constant TRAP_MECALL   : natural := 11; -- Ecall Exception
+    constant TRAP_MEI_IRQ  : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(11, 31)); -- External Interrupt 
+    constant TRAP_MSI_IRQ  : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(3 , 31)); -- Software Interrupt
+    constant TRAP_MTI_IRQ  : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(7 , 31)); -- Timer Interrupt 
+    constant TRAP_IMA      : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(0 , 31)); -- Instruction Misaligned Address Exception
+    constant TRAP_IACC     : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(1 , 31)); -- Instruction Access Error Exception
+    constant TRAP_ILL_INTR : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(2 , 31)); -- Illegal Instruction Exception
+    constant TRAP_EBREAK   : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(3 , 31)); -- Ebreak Exception
+    constant TRAP_LMA      : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(4 , 31)); -- Load Misaligned Address Exception
+    constant TRAP_LACC     : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(5 , 31)); -- Load Access Exception 
+    constant TRAP_SMA      : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(6 , 31)); -- Store Misaligned Address Exception
+    constant TRAP_SACC     : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(7 , 31)); -- Store Access Exception
+    constant TRAP_MECALL   : std_logic_vector(30 downto 0) := std_logic_vector(to_unsigned(11, 31)); -- Ecall Exception
 
 
 
@@ -302,18 +302,18 @@ package rv32_pkg is
     -- run-time writable by cpu or by software 
     type csr_t is record      
         mstatus_mie  : std_logic; 
-        mstatus_mpie  : std_logic; 
-        mcause_intr   : std_logic; 
-        mcause_code   : std_logic_vector(30 downto 0); 
-        mie_msi: std_logic; 
-        mie_mti: std_logic; 
-        mie_mei: std_logic; 
-        mip_msi: std_logic; 
-        mip_mti: std_logic; 
-        mip_mei: std_logic; 
-        mepc     : std_logic_vector(31 downto 2);  
-        mcycle   : std_logic_vector(31 downto 0);  
-        minstret : std_logic_vector(31 downto 0);  
+        mstatus_mpie : std_logic; 
+        mcause_intr  : std_logic; 
+        mcause_code  : std_logic_vector(30 downto 0); 
+        mie_msi      : std_logic; 
+        mie_mti      : std_logic; 
+        mie_mei      : std_logic; 
+        mip_msi      : std_logic; 
+        mip_mti      : std_logic; 
+        mip_mei      : std_logic; 
+        mepc         : std_logic_vector(31 downto 2);  
+        mcycle       : std_logic_vector(31 downto 0);  
+        minstret     : std_logic_vector(31 downto 0);  
     end record;
 
 
@@ -346,6 +346,7 @@ package rv32_pkg is
         me_irq_pulse       : std_logic; 
         instr_adr_ma_excpt : std_logic; 
         instr_access_excpt : std_logic; 
+        illeg_instr_excpt  : std_logic;
         ecall_excpt        : std_logic; 
         ebreak_excpt       : std_logic; 
         pc                 : std_logic_vector(31 downto 0);
@@ -353,15 +354,15 @@ package rv32_pkg is
         rs1_adr            : std_logic_vector(4 downto 0);
         rs2_adr            : std_logic_vector(4 downto 0);
         rdst_adr           : std_logic_vector(4 downto 0);
-        rs1_dat            : std_logic_vector(4 downto 0);
-        rs2_dat            : std_logic_vector(4 downto 0);
+        rs1_dat            : std_logic_vector(31 downto 0);
+        rs2_dat            : std_logic_vector(31 downto 0);
         imm32              : std_logic_vector(31 downto 0);
         funct3             : std_logic_vector(2 downto 0);
         funct7             : std_logic_vector(6 downto 0);
 
         -- Not pipelined into next stage 
         instr              : std_logic_vector(31 downto 0);
-        regfile            : slv_array_t(1 to 31)(31 downto 0);
+        regfile            : slv_array_t(0 to 31)(31 downto 0);
         opcode             : std_logic_vector(6 downto 0);
         dec_fw_rs1_dat     : std_logic_vector(31 downto 0);
         dec_fw_rs2_dat     : std_logic_vector(31 downto 0);
@@ -399,6 +400,7 @@ package rv32_pkg is
         ebreak_excpt       : std_logic; 
         instr_adr_ma_excpt : std_logic; 
         instr_access_excpt : std_logic; 
+        illeg_instr_excpt  : std_logic;
         any_trap           : std_logic;
         csr_access         : std_logic;
         rs1_adr            : std_logic_vector(4 downto 0);  
@@ -414,6 +416,7 @@ package rv32_pkg is
         csr_wdata          : std_logic_vector(31 downto 0);
         csr_rdata          : std_logic_vector(31 downto 0);
         csr                : csr_t; 
+        is_rtype           : std_logic;
     end record;
  
     -- Memory Stage ------------------------------------------------------------
@@ -460,24 +463,23 @@ package rv32_pkg is
         mem_fw_rs2_sel : std_logic_vector(1 downto 0);
         
         -- Hazards 
-        ld_hazard    : std_logic;
-        br_ld_hazard: std_logic;
-        jalr_ld_hazard: std_logic;
-        br_hazard: std_logic;
-        jalr_hazard: std_logic;
-        mret_hazard: std_logic;
+        ld_hazard      : std_logic;
+        br_ld_hazard   : std_logic;
+        jalr_ld_hazard : std_logic;
+        br_hazard      : std_logic;
+        jalr_hazard    : std_logic;
+        mret_hazard    : std_logic;
 
         -- Piepline register control signals
-        pc_enable: std_logic;
-        dec_enable: std_logic;
-        exe_enable: std_logic;
-        mem_enable: std_logic;
-        wrb_enable: std_logic;
-        dec_flush : std_logic;
-        exe_flush : std_logic;
-        mem_flush : std_logic;
-        wrb_flush : std_logic;
-
+        pc_enable  : std_logic;
+        dec_enable : std_logic;
+        exe_enable : std_logic;
+        mem_enable : std_logic;
+        wrb_enable : std_logic;
+        dec_flush  : std_logic;
+        exe_flush  : std_logic;
+        mem_flush  : std_logic;
+        wrb_flush  : std_logic;
     end record; 
 
     -- Performance Counters ----------------------------------------------------
