@@ -25,3 +25,7 @@ RISC V implementation
 Something to consider: Move csr writes to writeback stage.
 Forwarding should still work. 
 I think hardware and software writes would both happen at that stage
+
+Another thing to consider: May need to add a cycle of latency on memory error 
+and or stall response so that timing can be improved
+ 

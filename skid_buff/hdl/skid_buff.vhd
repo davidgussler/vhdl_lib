@@ -39,7 +39,7 @@ use ieee.numeric_std.all;
 entity skid_buff is 
     generic(
         G_WIDTH    : positive := 32;
-        G_REG_OUTS : boolean := FALSE
+        G_REG_OUTS : boolean  := FALSE
     );
     port(
         i_clk : in std_logic;
@@ -63,7 +63,6 @@ architecture rtl of skid_buff is
     -- Registers
     signal r_idata : std_logic_vector(G_WIDTH-1 downto 0);
     signal r_valid : std_logic;
-    signal r_oready : std_logic;
 
     -- Wires
     signal ovalid : std_logic;
@@ -76,11 +75,10 @@ begin
     -- -------------------------------------------------------------------------
     odata <= r_idata when r_valid else i_data;
     ovalid <= i_valid or r_valid;
-    o_ready <= r_oready;
 
-    slave_not_stalled <= '1' when ((not ovalid) or i_ready) else '0';
+    slave_not_stalled <= '1' when (not ovalid or i_ready) else '0';
     m_sending_s_stalled <= '1' when 
-        (i_valid and r_oready) and (ovalid and (not i_ready))
+        (i_valid and o_ready) and (ovalid and not i_ready)
         else '0';
 
     -- Sync --------------------------------------------------------------------
@@ -90,16 +88,16 @@ begin
         if rising_edge(i_clk) then
             if (i_rst) then
                 r_valid <= '0';
-                r_oready <= '1';
+                o_ready <= '1';
             else 
                 -- Master is sending data, but the slave side is stalled
                 if (m_sending_s_stalled) then
                     r_valid <= '1';
-                    r_oready <= '0';
+                    o_ready <= '0';
                 -- Output is not stalled
                 elsif (i_ready) then
                     r_valid <= '0';
-                    r_oready <= '1';
+                    o_ready <= '1';
                 end if;
             end if;
         end if;

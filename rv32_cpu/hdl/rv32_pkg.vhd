@@ -334,6 +334,7 @@ package rv32_pkg is
         dly_mip_mti        : std_logic; 
         dly_mip_mei        : std_logic; 
         trap_taken         : std_logic;
+        last_pc            : std_logic_vector(31 downto 0);
     end record;
  
     -- Decode Stage ------------------------------------------------------------
@@ -362,6 +363,9 @@ package rv32_pkg is
 
         -- Not pipelined into next stage 
         instr              : std_logic_vector(31 downto 0);
+        irdat              : std_logic_vector(31 downto 0);
+        last_instr         : std_logic_vector(31 downto 0);
+        last_dec_en        : std_logic; 
         regfile            : slv_array_t(0 to 31)(31 downto 0);
         opcode             : std_logic_vector(6 downto 0);
         dec_fw_rs1_dat     : std_logic_vector(31 downto 0);
@@ -416,6 +420,7 @@ package rv32_pkg is
         csr_wdata          : std_logic_vector(31 downto 0);
         csr_rdata          : std_logic_vector(31 downto 0);
         csr                : csr_t; 
+        mret               : std_logic;
         is_rtype           : std_logic;
     end record;
  
@@ -450,6 +455,7 @@ package rv32_pkg is
         exe_rslt     : std_logic_vector(31 downto 0); 
         rdst_dat     : std_logic_vector(31 downto 0);  
         memrd_dat    : std_logic_vector(31 downto 0); 
+        funct3       : std_logic_vector(2 downto 0); 
     end record;
     
     -- Hazard Unit -------------------------------------------------------------
@@ -539,4 +545,4 @@ package rv32_pkg is
     constant NOP_INSTR : std_logic_vector(31 downto 0) := 
             x"000" & b"00000" & b"00000" & F3_SUBADD & OPCODE_ALUI;
 
-end package rv32_pkg; 
+end package; 

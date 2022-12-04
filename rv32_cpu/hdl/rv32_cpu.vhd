@@ -169,9 +169,40 @@ begin
     fet.instr_adr_ma_excpt <= (fet.pc(0) or fet.pc(1)) and o_iren;
     fet.instr_access_excpt <= i_ierror and o_iren; 
 
-    o_iren <= '1'; 
-    o_iaddr   <= fet.pc;
-    dec.instr <= i_irdat;
+    -- TODO: This is going to slow us down terribly. I'll fix this in V2. For 
+    -- now its necessary to get variable latency memory working.. 
+    -- Going to add an extra stage after fetch and and extra stage after mem 
+    -- in v2 to register memory accesses. Pipeline in V2 needs to be designed to 
+    -- assume a minimum 2 cycle mem latency instead of 1 which I'm doing here. 
+    --o_iren <= '1';
+    -- ap_iren : process (all)
+    -- begin
+    --     if i_rst then
+    --         o_iren <= '1';
+    --     else
+    --         o_iren <=  haz.pc_enable;
+    --     end if;
+
+    -- end process;
+    
+    o_iren    <= haz.pc_enable and not i_rst; 
+
+    -- This whole section is pretty fucked up
+    -- needs a rewrite / rethink 
+
+    pc_something : process (i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_rst) then
+                fet.last_pc  <= (others=>'-'); 
+            else 
+                fet.last_pc  <= fet.pc; 
+            end if; 
+        end if;
+    end process;
+
+    o_iaddr   <= fet.last_pc;
+    dec.irdat <= i_irdat;
 
 
     -- =========================================================================
@@ -195,7 +226,7 @@ begin
                 dec.me_irq_pulse       <= fet.me_irq_pulse;
                 dec.instr_adr_ma_excpt <= fet.instr_adr_ma_excpt;
                 dec.instr_access_excpt <= fet.instr_access_excpt;
-                dec.pc                 <= fet.pc; 
+                dec.pc                 <= fet.last_pc; 
             end if;
         end if;
     end process;
@@ -203,6 +234,26 @@ begin
     -- =========================================================================
     -- Decode Stage ============================================================
     -- =========================================================================
+    
+    -- Selects the last instruction on a stall of this stage
+    -- Needed because the instruction comes one cycle late. 
+    -- Probably losing performance by having the BRAM data go directly to the 
+    -- decode stage. Consider adding another fetch stage to register the instruction 
+    -- before decoding. 
+    sfet_dec_regs : process (i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_rst) then
+                dec.last_instr  <= (others=>'-'); 
+                dec.last_dec_en <= '1';
+            else 
+                dec.last_instr  <= dec.instr; 
+                dec.last_dec_en <= haz.dec_enable;
+            end if; 
+        end if;
+    end process;
+    dec.instr <= dec.irdat when dec.last_dec_en else dec.last_instr; 
+    
     dec.opcode   <= dec.instr(RANGE_OPCODE);
     dec.rs1_adr  <= dec.instr(RANGE_RS1);
     dec.rs2_adr  <= dec.instr(RANGE_RS2);
@@ -512,6 +563,8 @@ begin
     -- Adding the extra hardware to resolve branch in this stage rather than
     -- alu stage to save a stall cycle on mispredicted branches. Using a simple
     -- predict not taken scheme. 
+    -- This probably adds to the crit path. Consider moving this to a later stage.
+    -- Its a mispredict penalty vs clockspeed tradeoff. 
     ap_branch_resolution : process(all)
         variable v_brt_adr : std_logic_vector(31 downto 0);
     begin
@@ -586,7 +639,10 @@ begin
     sp_dec_exe_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst or haz.exe_flush) then
+            -- We also explicitly flush this stage on the next cycle after last stage was flushed 
+            -- this is necessary because the control signals generated in the decode 
+            -- stage cannot be flushed the same cycle they are created. 
+            if (i_rst or haz.exe_flush or not dec.instret_incr) then
                 exe.instret_incr       <= '0'; 
                 exe.ms_irq_pulse       <= '0'; 
                 exe.mt_irq_pulse       <= '0'; 
@@ -641,6 +697,7 @@ begin
                 exe.imm32              <= dec.imm32; 
                 exe.funct3             <= dec.funct3;
                 exe.funct7             <= dec.funct7;
+                exe.mret               <= dec.mret; 
                 -- Is this an R-Type instruction? Used for making alu opcode.
                 exe.is_rtype <= '1' when dec.ctrl.imm_type = RTYPE else '0';
             end if; 
@@ -794,12 +851,15 @@ begin
     end process;
 
     -- Was there a trap? 
-    -- Memory stage exceptions are forwarded to this stage
-    -- All others are generated at or before this stage
+    -- Memory stage exceptions are forwarded to this stage. It is okay to write 
+    -- the memory stage excpetions during this execute stage without stalling 
+    -- because the instruction that the memory exception is overwriting will 
+    -- get flushed anyways due to the bad memory instruction. 
+    -- All others are generated at or before this stage.
     exe.any_trap <= exe.ms_irq_pulse or exe.mt_irq_pulse or exe.me_irq_pulse or 
                     mem.load_adr_ma_excpt or mem.load_access_excpt or 
                     mem.store_adr_ma_excpt or mem.store_access_excpt or 
-                    exe.ctrl.illegal or exe.ecall_excpt or exe.ebreak_excpt or 
+                    exe.illeg_instr_excpt or exe.ecall_excpt or exe.ebreak_excpt or 
                     exe.instr_adr_ma_excpt or exe.instr_access_excpt; 
 
     -- Writes
@@ -809,26 +869,127 @@ begin
             if (i_rst) then
                 -- These are the only CSRs that need to be reset to a specific value
                 -- All others are undefined according to the spec. This means that 
-                -- SW must initialize the undefined CSRs
+                -- SW should initialize the undefined CSRs
                 exe.csr.mstatus_mie  <= '0';
                 exe.csr.mcause_intr  <= '0';
                 exe.csr.mcause_code  <= (others=>'0');
 
-                exe.csr.mstatus_mpie <= '-';
-                exe.csr.mie_msi      <= '-';
-                exe.csr.mie_mti      <= '-';
-                exe.csr.mie_mei      <= '-';
-                exe.csr.mip_msi      <= '-';
-                exe.csr.mip_mti      <= '-';
-                exe.csr.mip_mei      <= '-';
+                -- These CSRs are not required to be reset by hardware
+                -- Im initializing some of them anyways for convenience
+                exe.csr.mstatus_mpie <= '0';
+                exe.csr.mie_msi      <= '0';
+                exe.csr.mie_mti      <= '0';
+                exe.csr.mie_mei      <= '0';
+                exe.csr.mip_msi      <= '0';
+                exe.csr.mip_mti      <= '0';
+                exe.csr.mip_mei      <= '0';
                 exe.csr.mepc         <= (others=>'-');
-                exe.csr.mcycle       <= (others=>'-');
-                exe.csr.minstret     <= (others=>'-');
+                exe.csr.mcycle       <= (others=>'0');
+                exe.csr.minstret     <= (others=>'0');
 
-            -- Software writes by CSR instructions
             -- SW Writes take priority over HW if both try to write on the same cycle
             else 
-                if (exe.csr_access) then
+
+                -- HW writes by CPU
+                -- 
+                -- TODO: add these with FP extension 
+                --exe.csr.fflags      <= ; 
+                --exe.csr.frm         <= ; 
+                --exe.csr.fcsr        <= ; 
+                --exe.csr.mstatus(FS) <= ; 
+                --exe.csr.mstatus(SD) <= ; 
+                
+                exe.csr.mip_msi <= i_ms_irq;
+                exe.csr.mip_mti <= i_me_irq;
+                exe.csr.mip_mei <= i_mt_irq;
+
+                exe.csr.mcycle   <= cnt.mcycle; 
+                exe.csr.minstret <= cnt.minstret; 
+
+                -- Set Previous IE status on a trap 
+                if (exe.any_trap) then
+                    exe.csr.mstatus_mpie     <= exe.csr.mstatus_mie;
+                end if;  
+
+                -- Restore IE status on a mret 
+                if (exe.mret) then
+                    exe.csr.mstatus_mie     <= exe.csr.mstatus_mpie;
+                end if;  
+            
+
+                -- Set the trap cause register and exception program counter
+                -- register 
+                -- Priority defined in risc V spec 
+                -- NOTE: SW is expected to increment the epc to the next instruction 
+                -- for an ecall/ebreak. If SW doesnt do this, then we'll get caught 
+                -- in an ecall / irq handler / mret ... loop 
+                -- I wanted to set the epc to pc+4 for ecall/ebreak, but doing so 
+                -- would violate the RISCV specification
+                if (exe.me_irq_pulse) then
+                    exe.csr.mcause_intr      <= '1'; 
+                    exe.csr.mcause_code      <= TRAP_MEI_IRQ; --11
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                elsif (exe.ms_irq_pulse) then 
+                    exe.csr.mcause_intr      <= '1'; 
+                    exe.csr.mcause_code      <= TRAP_MSI_IRQ; --3
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                elsif (exe.mt_irq_pulse) then
+                    exe.csr.mcause_intr      <= '1'; 
+                    exe.csr.mcause_code      <= TRAP_MTI_IRQ; --7
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                elsif (exe.instr_adr_ma_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_IMA; --0
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                elsif (exe.instr_access_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_IACC; --1
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                elsif (exe.ctrl.illegal) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_ILL_INTR; --2
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                elsif (exe.ebreak_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_EBREAK; --3
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                elsif (mem.load_adr_ma_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_LMA; --4
+                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                elsif (mem.load_access_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_LACC; --5
+                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                elsif (mem.store_adr_ma_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_SMA; --6
+                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                elsif (mem.store_access_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_SACC; --7
+                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
+                elsif (exe.ecall_excpt) then
+                    exe.csr.mcause_intr      <= '0'; 
+                    exe.csr.mcause_code      <= TRAP_MECALL; --11
+                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                end if; 
+
+
+                -- SW Writes
+                -- Block SW writes if there's an exception. This prevents the second 
+                -- instruction in the sequence shown below from writing to the CSR when 
+                -- it shouldnt. This is an issue because memory stage exceptions are 
+                -- determined one cycle after this stage
+                --      1.) instruction causing memory exception
+                --      2.) csr write instruction
+                -- This could also be an issue when an exception happens on a csr instruction
+                -- We dont want SW to update the csr state in this case. The trapped 
+                -- instruction doesnt get cleared till the wrb stage because the cpu 
+                -- needs to update the csr state in this stage. 
+                -- Another solution would be to move CSR writes to the writeback stage 
+                -- but this would imply additional forwarding. This solution seems cleaner. 
+                if (exe.csr_access and not exe.any_trap) then
                     case exe.imm32(11 downto 0) is
                         --when CSR_FFLAGS  => TODO: 
                         --when CSR_FRM     =>
@@ -855,86 +1016,6 @@ begin
                         when others =>
                             null;
                     end case;   
-                else
-
-                    -- HW writes by CPU
-                    -- 
-                    -- TODO: add these with FP extension 
-                    --exe.csr.fflags      <= ; 
-                    --exe.csr.frm         <= ; 
-                    --exe.csr.fcsr        <= ; 
-                    --exe.csr.mstatus(FS) <= ; 
-                    --exe.csr.mstatus(SD) <= ; 
-                    
-                    exe.csr.mip_msi <= i_ms_irq;
-                    exe.csr.mip_mti <= i_me_irq;
-                    exe.csr.mip_mei <= i_mt_irq;
-
-                    exe.csr.mcycle   <= cnt.mcycle; 
-                    exe.csr.minstret <= cnt.minstret; 
-
-                    -- Set Previous IE status on a trap 
-                    if (exe.any_trap) then
-                        exe.csr.mstatus_mpie     <= exe.csr.mstatus_mie;
-                    end if;   
-
-                    -- Set the trap cause register and exception program counter
-                    -- register 
-                    -- Priority defined in risc V spec 
-                    -- NOTE: SW is expected to increment the epc to the next instruction 
-                    -- for an ecall/ebreak. If SW doesnt do this, then we'll get caught 
-                    -- in an ecall / irq handler / mret ... loop 
-                    -- I wanted to set the epc to pc+4 for ecall/ebreak, but doing so 
-                    -- would violate the RISCV specification
-                    if (exe.me_irq_pulse) then
-                        exe.csr.mcause_intr      <= '1'; 
-                        exe.csr.mcause_code      <= TRAP_MEI_IRQ; --11
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    elsif (exe.ms_irq_pulse) then 
-                        exe.csr.mcause_intr      <= '1'; 
-                        exe.csr.mcause_code      <= TRAP_MSI_IRQ; --3
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    elsif (exe.mt_irq_pulse) then
-                        exe.csr.mcause_intr      <= '1'; 
-                        exe.csr.mcause_code      <= TRAP_MTI_IRQ; --7
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    elsif (exe.instr_adr_ma_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_IMA; --0
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    elsif (exe.instr_access_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_IACC; --1
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    elsif (exe.ctrl.illegal) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_ILL_INTR; --2
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    elsif (exe.ebreak_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_EBREAK; --3
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    elsif (mem.load_adr_ma_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_LMA; --4
-                        exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                    elsif (mem.load_access_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_LACC; --5
-                        exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                    elsif (mem.store_adr_ma_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_SMA; --6
-                        exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                    elsif (mem.store_access_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_SACC; --7
-                        exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                    elsif (exe.ecall_excpt) then
-                        exe.csr.mcause_intr      <= '0'; 
-                        exe.csr.mcause_code      <= TRAP_MECALL; --11
-                        exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                    end if; 
                 end if; 
             end if; 
         end if;
@@ -1054,8 +1135,8 @@ begin
 
     -- Memory Access -----------------------------------------------------------
     -- -------------------------------------------------------------------------
-    o_dren  <= mem.ctrl.mem_rd;  
-    o_dwen  <= mem.ctrl.mem_wr;       
+    o_dren  <= mem.ctrl.mem_rd and not i_dstall;  
+    o_dwen  <= mem.ctrl.mem_wr and not i_dstall;       
     o_daddr <= mem.exe_rslt; 
     o_dwdat <= mem.mem_fw_rs2_dat; 
     
@@ -1065,16 +1146,31 @@ begin
     mem.store_access_excpt <= mem.ctrl.mem_wr and i_derror;
 
 
+    -- Stores
+    ap_data_store : process (all)
+    begin
+        case (mem.funct3) is
+            when F3_SB  => o_dben <= b"0001";
+            when F3_SH  => o_dben <= b"0011";   
+            when F3_SW  => o_dben <= b"1111"; 
+            when others => o_dben <= b"----";
+        end case;
+    end process;
+
+
     -- Loads
+    -- This one may look a little weird... 
+    -- We can't determine this value till wrb stage becasue memory loads take 
+    -- at least one cycle
     ap_data_load : process (all)
     begin
-        case mem.funct3 is 
+        case (wrb.funct3) is 
             when F3_LB  => 
-                wrb.memrd_dat(31 downto 8)  <= (others=>i_drdat(8));
+                wrb.memrd_dat(31 downto 8)  <= (others=>i_drdat(7));
                 wrb.memrd_dat(7 downto 0)   <= i_drdat(7 downto 0);
 
             when F3_LH  =>
-                wrb.memrd_dat(31 downto 16) <= (others=>i_drdat(16));
+                wrb.memrd_dat(31 downto 16) <= (others=>i_drdat(15));
                 wrb.memrd_dat(15 downto 0)  <= i_drdat(15 downto 0);
 
             when F3_LW  => 
@@ -1094,17 +1190,6 @@ begin
         end case; 
     end process;
 
-    -- Stores
-    ap_data_store : process (all)
-    begin
-        case mem.funct3 is
-            when F3_SB  => o_dben <= b"0001";
-            when F3_SH  => o_dben <= b"0011";   
-            when F3_SW  => o_dben <= b"1111"; 
-            when others => o_dben <= b"----";
-        end case;
-    end process;
-
 
     -- =========================================================================
     -- Memory/Writeback Registers ==============================================
@@ -1119,6 +1204,7 @@ begin
                 wrb.pc4          <= (others=>'-');
                 wrb.rdst_adr     <= (others=>'-');
                 wrb.exe_rslt     <= (others=>'-');
+                wrb.funct3       <= (others=>'-');
             elsif (haz.wrb_enable) then
                 wrb.instret_incr <= mem.instret_incr; 
                 wrb.ctrl.reg_wr  <= mem.ctrl.reg_wr;
@@ -1126,6 +1212,7 @@ begin
                 wrb.pc4          <= std_logic_vector(unsigned(mem.pc) + 4);
                 wrb.rdst_adr     <= mem.rdst_adr;
                 wrb.exe_rslt     <= mem.exe_rslt;
+                wrb.funct3       <= mem.funct3;
             else
                 wrb.instret_incr <= '0'; 
             end if; 
@@ -1296,7 +1383,7 @@ begin
         
         -- Control Hazards -----------------------------------------------------
         -- kill the instruction that caused the trap after it has written its trap information during the exe stage
-        -- This way, any illegal value that comes from an illegal instruction does not get writen back.
+        -- This way, any illegal value that comes from an illegal instruction does not get writen back to the register file.
         -- We also don't want exception / interrupted instructions to increment the instruction 
         -- performance counter. 
         if (exe.any_trap) then 
@@ -1326,7 +1413,8 @@ begin
         -- 2. speculatively fethed instruction (flushed)
         -- 3. trap handler base address instruction 
         if (dec.illeg_instr_excpt or dec.ecall_excpt or dec.ebreak_excpt or 
-                    dec.mret or dec.fence or dec.fencei or dec.br_taken) then
+                (dec.mret and not haz.mret_hazard) or dec.fence or dec.fencei --TODO: not sure about fence and fenci here...
+                or dec.br_taken) then
             haz.dec_flush <= '1';
         end if; 
 
@@ -1337,12 +1425,13 @@ begin
             haz.dec_enable <= '0';
             haz.exe_enable <= '0'; 
             haz.mem_enable <= '0';
-            haz.wrb_flush  <= '1';
+            haz.wrb_enable <= '0';
         end if; 
 
         if (i_istall) then -- pause the pipeline while waiting on the imem
             haz.pc_enable  <= '0'; 
             haz.dec_flush  <= '1'; 
+            haz.exe_flush  <= '1'; 
         end if;
 
 

@@ -17,7 +17,8 @@ end entity;
 
 architecture tb of rv32_cpu_tb is
 
-    -- Simulation Signals / Constants
+    -- Simulation Signals / Constants ------------------------------------------
+    -- -------------------------------------------------------------------------
     constant C_CLK_PERIOD : time := 10 ns; 
     constant C_CLK2Q      : time := 1 ns;
 
@@ -25,8 +26,12 @@ architecture tb of rv32_cpu_tb is
     signal rst            : std_logic := '1';
     signal rstn           : std_logic := '0';
 
+    shared variable sv_mem_latency : positive := 3; 
 
-    -- DUT Constants / Signals 
+
+    -- DUT Signals / Constants -------------------------------------------------
+    -- ------------------------------------------------------------------------- 
+
     constant HART_ID    : std_logic_vector(31 downto 0) := x"0000_0000";
     constant RESET_ADDR : std_logic_vector(31 downto 0) := x"0000_0000";
     constant TRAP_ADDR  : std_logic_vector(31 downto 0) := x"0000_0800";
@@ -72,8 +77,6 @@ architecture tb of rv32_cpu_tb is
     signal dut    : cpu_t;
     signal neorv  : cpu_t;
     signal golden : golden_t; 
-    
-
 
 
 
@@ -306,23 +309,26 @@ architecture tb of rv32_cpu_tb is
 
 
     constant EXCEPTION_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
-        0  => rv_addi(1, 0, 3), 
-        1  => rv_addi(2, 0, 4),  
-        2  => rv_addi(8, 0, 1024),
-        3  => rv_ecall,
+        0  => rv_addi(10, 0, to_integer(unsigned(TRAP_ADDR))), 
+        1  => rv_csrrw(0, 10, to_integer(unsigned(CSR_MTVEC))), -- set the trap handler address    
 
-        4  => rv_addi(1, 0, 5), 
-        5  => rv_addi(2, 0, 6),
-        6  => rv_addi(8, 0, 1024+8),
-        7  => rv_ebreak,
+        2  => rv_addi(1, 0, 3), 
+        3  => rv_addi(2, 0, 4),  
+        4  => rv_addi(8, 0, 1024),
+        5  => rv_ecall,
 
-        8  => rv_addi(1, 0, 7), 
-        9  => rv_addi(2, 0, 8),
-        10 => rv_addi(8, 0, 1024+16),
-        11 => rv_sw(8, 1, 0),
-        12 => rv_sw(8, 2, 4), 
+        6  => rv_addi(1, 0, 5), 
+        7  => rv_addi(2, 0, 6),
+        8  => rv_addi(8, 0, 1024+8),
+        9  => rv_ebreak,
 
-        13 => rv_jal (0, 0),
+        10 => rv_addi(1, 0, 7), 
+        11 => rv_addi(2, 0, 8),
+        12 => rv_addi(8, 0, 1024+16),
+        13 => rv_sw(8, 1, 0),
+        14 => rv_sw(8, 2, 4), 
+
+        15 => rv_jal (0, 0),
 
         -- ecall/ebreak irq handler
         (to_integer(unsigned(TRAP_ADDR)))/4     => rv_sw(8, 1, 0),
@@ -331,6 +337,65 @@ architecture tb of rv32_cpu_tb is
         (to_integer(unsigned(TRAP_ADDR))+4*3)/4 => rv_addi(15, 15, 4),  
         (to_integer(unsigned(TRAP_ADDR))+4*4)/4 => rv_csrrw(0, 15, to_integer(unsigned(CSR_MEPC))),
         (to_integer(unsigned(TRAP_ADDR))+4*5)/4 => rv_mret,
+
+        others => (others=>'0')
+    );
+
+    constant STALL_HAZARD_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
+        0  => rv_addi(1, 0, 1000),
+        1  => rv_lw(2, 1, 0),
+        2  => rv_lw(3, 1, 4),
+        3  => rv_add(4, 2, 3),
+        4  => rv_add(5, 2, 3),
+
+        5  => rv_addi(8, 0, 111),
+        6  => rv_lw(6, 1, 8),
+        7  => rv_lw(7, 1, 8),
+        8  => rv_beq(6, 7, 4*4),
+
+        9  => rv_addi(8, 0, 1),
+        10 => rv_addi(8, 0, 2),
+        11 => rv_addi(8, 0, 3),
+
+        12 => rv_addi(10, 0, 111),
+        13 => rv_lw(9, 1, 8),
+        14 => rv_bne(9, 9, 4*4),
+
+        15 => rv_addi(10, 0, 1),
+        16 => rv_addi(10, 0, 2),
+        17 => rv_addi(10, 0, 3),
+
+        18 => rv_addi(11, 0, 56),
+        19 => rv_bge(10,11, 4),
+
+        20 => rv_lw(12, 1, 4*3),
+        21 => rv_jalr(13, 12, 1012-4),
+
+        22 => rv_sw(0, 1,  1024),
+        23 => rv_sw(0, 2,  1024+1*4), 
+        24 => rv_sw(0, 3,  1024+2*4), 
+        25 => rv_sw(0, 4,  1024+3*4), 
+        26 => rv_sw(0, 5,  1024+4*4), 
+        27 => rv_sw(0, 6,  1024+5*4), 
+        28 => rv_sw(0, 7,  1024+6*4), 
+        29 => rv_sw(0, 8,  1024+7*4), 
+        30 => rv_sw(0, 9,  1024+8*4), 
+        31 => rv_sw(0, 10, 1024+9*4), 
+        32 => rv_sw(0, 11, 1024+10*4), 
+        33 => rv_sw(0, 12, 1024+11*4), 
+        34 => rv_sw(0, 13, 1024+12*4), 
+
+        35 => rv_jal(0, 0),
+
+        -- data
+        1000/4 => x"1234_5678",
+        1004/4 => x"9ABC_DEF0",
+        1008/4 => x"F101_DEFA",
+        1012/4 => x"0000_0004",
+
+        -- jalr location
+        1016/4 => rv_sw(0, 5, 1024),
+        1020/4 => rv_jalr(0, 13, 0),
 
         others => (others=>'0')
     );
@@ -345,6 +410,10 @@ architecture tb of rv32_cpu_tb is
 
         others => (others=>'0')
     );
+
+
+    -- TODO: Re-run all tests, but inject random data and instruction memory stalls
+
 
     -- Memory Procedures -------------------------------------------------------
     -- -------------------------------------------------------------------------
@@ -518,6 +587,24 @@ begin
 
 
 
+            elsif run("stall-hazard") then
+                info("Loading stall-hazard test program into memories...");
+                mem_init(memory_dut, STALL_HAZARD_TEST); 
+                mem_init(memory_golden, STALL_HAZARD_TEST); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * C_CLK_PERIOD;
+                wait for 500 * C_CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("Stall-Hazard Test Success!");
+
+
             elsif run("random") then
                 info("Loading random instruction sequence into memories...");
                 mem_init(memory_dut, RANDOM_TEST); 
@@ -604,9 +691,27 @@ begin
     np_iread : process
         variable v_dat : std_logic_vector(31 downto 0);
     begin
+        dut.istall <= '0';
         wait until rising_edge(clk) and dut.iren = '1';
-        v_dat := read_word(memory_dut, to_integer(unsigned(dut.iaddr(ADDR_WIDTH-1 downto 0))), 4);
-        dut.irdat <= v_dat;
+        if (sv_mem_latency = 1) then
+            dut.istall <= '0';
+            v_dat := read_word(memory_dut, to_integer(unsigned(dut.iaddr(ADDR_WIDTH-1 downto 0))), 4);
+            dut.irdat <= v_dat;
+        else 
+            dut.istall <= '1';
+            v_dat := (others=>'X');
+            dut.irdat <= v_dat;
+
+            for i in 0 to sv_mem_latency-2 loop
+                wait until rising_edge(clk);
+            end loop;
+
+            dut.istall <= '0';
+            v_dat := read_word(memory_dut, to_integer(unsigned(dut.iaddr(ADDR_WIDTH-1 downto 0))), 4);
+            dut.irdat <= v_dat;
+        end if; 
+        
+        
     end process;
 
     np_dread : process
@@ -634,7 +739,7 @@ begin
         end if; 
     end process;
 
-    dut.istall <= '0';
+    
     dut.ierr   <= '0';
     dut.dstall <= '0';
     dut.derr   <= '0';
