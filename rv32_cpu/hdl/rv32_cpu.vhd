@@ -10,6 +10,17 @@
 -- # 
 -- #############################################################################
 
+-- TODO: 
+-- update package with new signal names
+-- update testbench with new interface 
+-- update testbench memory simulator with ack and make sure stall timing is correct
+-- run tests with and without memory stalls 
+-- add random instruction generator 
+-- make sure there's a test for changing the mtvec
+-- trial synthesis
+-- change headers to my new email
+
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -20,8 +31,7 @@ use work.rv32_pkg.all;
 entity rv32_cpu is
     generic (
         G_HART_ID    : std_logic_vector(31 downto 0) := x"0000_0000";
-        G_RESET_ADDR : std_logic_vector(31 downto 0) := x"0000_0000";
-        G_TRAP_ADDR  : std_logic_vector(31 downto 0) := x"0000_1000"
+        G_RESET_ADDR : std_logic_vector(31 downto 0) := x"0000_0000"
     );
     port (
         -- Clock & Reset
@@ -33,8 +43,10 @@ entity rv32_cpu is
         o_iaddr     : out std_logic_vector(31 downto 0);
         o_fencei    : out std_logic;
         i_irdat     : in  std_logic_vector(31 downto 0);
-        i_istall    : in  std_logic;
+        i_iack      : in  std_logic; 
         i_ierror    : in  std_logic;
+        i_istall    : in  std_logic;
+
 
         -- Data Interface 
         o_dren      : out std_logic;
@@ -44,8 +56,9 @@ entity rv32_cpu is
         o_dwdat     : out std_logic_vector(31 downto 0);
         o_fence     : out std_logic;
         i_drdat     : in  std_logic_vector(31 downto 0);
-        i_dstall    : in  std_logic;
+        i_dack      : in  std_logic; 
         i_derror    : in  std_logic;
+        i_dstall    : in  std_logic;
 
         -- Interrupts
         i_ms_irq   : in  std_logic; 
@@ -67,17 +80,20 @@ architecture rtl of rv32_cpu is
    -- Pipeline stage signals
    -- Signals associated with a stage can either come from the pipeline register
    -- before that phase or be set combinationally within that stage.
-   signal fet : fet_t; 
-   signal dec : dec_t; 
-   signal exe : exe_t;
-   signal mem : mem_t;  
-   signal wrb : wrb_t;
+   signal pc: fet_t; --TODO: 
+   signal f1 : fet_t;
+   signal f2 : fet_t;
+   signal id : dec_t; 
+   signal ex : exe_t;
+   signal m1 : mem_t;  
+   signal m2 : mem_t;  
+   signal wb : wrb_t;
 
    -- Hazard unit signals 
-   signal haz : haz_t; 
+   signal hz : haz_t; 
 
    -- Performance counter signals
-   signal cnt : cnt_t; 
+   signal ct : cnt_t; 
 
 begin
     --TODO: implement this when I add stalling on WFI instruction 
@@ -87,9 +103,9 @@ begin
     o_debug <= '0'; 
 
     -- =========================================================================
-    -- Fetch Stage =============================================================
+    -- Program Counter Stage ===================================================
     -- =========================================================================
-    
+
     -- Handle Interrupts & Exceptions ------------------------------------------
     -- -------------------------------------------------------------------------
     -- Delay the interrupt pending bits by 1 so we can detect a rising edge 
@@ -98,13 +114,13 @@ begin
     begin
         if (rising_edge(i_clk)) then
             if (i_rst) then
-                fet.dly_mip_msi <= '0';
-                fet.dly_mip_mti <= '0';
-                fet.dly_mip_mei <= '0';
+                pc.dly_mip_msi <= '0';
+                pc.dly_mip_mti <= '0';
+                pc.dly_mip_mei <= '0';
             else
-                fet.dly_mip_msi <= exe.csr.mip_msi;
-                fet.dly_mip_mti <= exe.csr.mip_mti;
-                fet.dly_mip_mei <= exe.csr.mip_mei;
+                pc.dly_mip_msi <= ex.csr.mip_msi;
+                pc.dly_mip_mti <= ex.csr.mip_mti;
+                pc.dly_mip_mei <= ex.csr.mip_mei;
             end if;
         end if;
     end process;
@@ -120,113 +136,147 @@ begin
     -- the the flow will jump to the trap addr again, even if we haven't gotten an mret
     -- instruciton. In practice this shouldn't be an issue (assuming the NVIC external to the 
     -- cpu is designed well)
-    fet.ms_irq_pulse <= (exe.csr.mip_msi and (not fet.dly_mip_msi or dec.mret)) and exe.csr.mie_msi and exe.csr.mstatus_mie; 
-    fet.mt_irq_pulse <= (exe.csr.mip_mti and (not fet.dly_mip_mti or dec.mret)) and exe.csr.mie_mti and exe.csr.mstatus_mie; 
-    fet.me_irq_pulse <= (exe.csr.mip_mei and (not fet.dly_mip_mei or dec.mret)) and exe.csr.mie_mei and exe.csr.mstatus_mie; 
+    pc.trap.ms_irq <= (ex.csr.mip_msi and (not pc.dly_mip_msi or ex.mret)) and ex.csr.mie_msi and ex.csr.mstatus_mie; 
+    pc.trap.mt_irq <= (ex.csr.mip_mti and (not pc.dly_mip_mti or ex.mret)) and ex.csr.mie_mti and ex.csr.mstatus_mie; 
+    pc.trap.me_irq <= (ex.csr.mip_mei and (not pc.dly_mip_mei or ex.mret)) and ex.csr.mie_mei and ex.csr.mstatus_mie; 
 
     
     -- All Exceptions and Interrupts
-    fet.trap_taken <= fet.ms_irq_pulse or fet.mt_irq_pulse or fet.me_irq_pulse or 
-            mem.load_adr_ma_excpt or mem.load_access_excpt or 
-            mem.store_adr_ma_excpt or mem.store_access_excpt or 
-            dec.illeg_instr_excpt or dec.ecall_excpt or dec.ebreak_excpt or 
-            fet.instr_adr_ma_excpt or fet.instr_access_excpt; 
+    pc.trap_taken <= pc.trap.ms_irq or pc.trap.mt_irq or pc.trap.me_irq or 
+                     m1.trap.load_adr_ma or m2.trap.load_access or 
+                     m1.trap.store_adr_ma or m2.trap.store_access or 
+                     ex.trap.illeg_instr or ex.trap.ecall or ex.trap.ebreak or 
+                     ex.trap.instr_adr_ma or ex.trap.instr_access; 
 
 
 
-    -- Program Counter ---------------------------------------------------------
+    -- Forwarding Muxes
+    ap_pc_fw_sel : process (all) 
+    begin 
+        -- Forwarding MEPC to PC stage. Needed since csrs are not written till wb stage
+        if (ex.mret = '1' and m1.csr_access = '1' and m1.csr_adr = CSR_MEPC) then
+            pc.pc_fw_mepc <= m1.csr_wdata; 
+        elsif (ex.mret = '1' and m2.csr_access = '1' and m2.csr_adr = CSR_MEPC) then
+            pc.pc_fw_mepc <= m2.csr_wdata; 
+        elsif (ex.mret = '1' and wb.csr_access = '1' and wb.csr_adr = CSR_MEPC) then
+            pc.pc_fw_mepc <= wb.csr_wdata; 
+        else 
+            pc.pc_fw_mepc <= ex.csr.mtvec;
+        end if;
+
+
+        -- Forwarding MTVEC to PC stage. Needed since csrs are not written till wb stage
+        if (ex.any_trap = '1' and m1.csr_access = '1' and m1.csr_adr = CSR_MTVEC) then
+            pc.pc_fw_mtvec <= m1.csr_wdata; 
+        elsif (ex.any_trap = '1' and m2.csr_access = '1' and m2.csr_adr = CSR_MTVEC) then
+            pc.pc_fw_mtvec <= m2.csr_wdata; 
+        elsif (ex.any_trap = '1' and wb.csr_access = '1' and wb.csr_adr = CSR_MTVEC) then
+            pc.pc_fw_mtvec <= wb.csr_wdata; 
+        else 
+            pc.pc_fw_mtvec <= ex.csr.mtvec; 
+        end if;
+    end process; 
+
+    
+
+    -- Program Counter ------------------------------------------------
     -- -------------------------------------------------------------------------
-    sp_pc : process (i_clk) 
+    ap_pc : process (all) 
     begin
-        if (rising_edge(i_clk)) then
-            if (i_rst) then
-                fet.instret_incr <= '1'; 
-                fet.pc <= G_RESET_ADDR(31 downto 2) & b"00";
-            elsif (haz.pc_enable) then
-
-                -- instret_incr increments the instructions retired performance counter
-                -- The value starts off as '1' for an enabled fetch, but it can get
-                -- overwritten with a zero at any stage if that instruction gets flushed. 
-                -- It will also get overwritten with a zero in the wrb stage if that 
-                -- stage is stalled (because we dont want to "double count" a stalled valid 
-                -- instruction) wrb.instret_incr is what finally gets used to increment 
-                -- the performance counter 
-                fet.instret_incr <= '1'; 
-
-                if (dec.mret) then
-                    fet.pc <= exe.csr.mepc(31 downto 2) & b"00";
-                elsif (fet.trap_taken) then -- Must have higher priority than branch 
-                    fet.pc <= G_TRAP_ADDR(31 downto 2) & b"00";
-                elsif (dec.br_taken) then
-                    fet.pc <= dec.brt_adr; 
-                else 
-                    fet.pc <= std_logic_vector(unsigned(fet.pc) + 4);  
-                end if;
-            end if;
-        end if; 
+        if (ex.mret) then
+            pc.pc <= pc.pc_fw_mepc(31 downto 2) & b"00"; 
+        elsif (pc.trap_taken) then -- Must have higher priority than branch 
+            pc.pc <= pc.pc_fw_mtvec(31 downto 2) & b"00";
+        elsif (id.br_taken) then
+            pc.pc <= id.brt_adr; 
+        else 
+            pc.pc <= std_logic_vector(unsigned(f1.pc) + 4);  
+        end if;
     end process;
     
-    fet.instr_adr_ma_excpt <= (fet.pc(0) or fet.pc(1)) and o_iren;
-    fet.instr_access_excpt <= i_ierror and o_iren; 
-
-    -- TODO: This is going to slow us down terribly. I'll fix this in V2. For 
-    -- now its necessary to get variable latency memory working.. 
-    -- Going to add an extra stage after fetch and and extra stage after mem 
-    -- in v2 to register memory accesses. Pipeline in V2 needs to be designed to 
-    -- assume a minimum 2 cycle mem latency instead of 1 which I'm doing here. 
-    --o_iren <= '1';
-    -- ap_iren : process (all)
-    -- begin
-    --     if i_rst then
-    --         o_iren <= '1';
-    --     else
-    --         o_iren <=  haz.pc_enable;
-    --     end if;
-
-    -- end process;
     
-    o_iren    <= haz.pc_enable and not i_rst; 
-
-    -- This whole section is pretty fucked up
-    -- needs a rewrite / rethink 
-
-    pc_something : process (i_clk)
+    sp_pc_f1_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
             if (i_rst) then
-                fet.last_pc  <= (others=>'-'); 
-            else 
-                fet.last_pc  <= fet.pc; 
-            end if; 
+                f1.pc          <= G_RESET_ADDR(31 downto 2) & b"00";
+                f1.trap.ms_irq <= '0';
+                f1.trap.mt_irq <= '0';
+                f1.trap.me_irq <= '0';
+            elsif (hz.pc_enable) then
+                f1.pc          <= pc.pc;
+                f1.trap.ms_irq <= pc.trap.ms_irq;
+                f1.trap.mt_irq <= pc.trap.mt_irq;
+                f1.trap.me_irq <= pc.trap.me_irq;
+            end if;
         end if;
     end process;
 
-    o_iaddr   <= fet.last_pc;
-    dec.irdat <= i_irdat;
 
 
     -- =========================================================================
-    -- Fetch/Decode Registers ==================================================
+    -- Fetch 1 Stage ===========================================================
     -- =========================================================================
-    sp_fet_dec_regs : process (i_clk)
+    -- Instruction data request
+    o_iren <= not i_rst; -- and hz.f1_en; 
+    o_iaddr <= f1.pc; 
+
+    f1.trap.instr_adr_ma <= (f1.pc(0) or f1.pc(1)) and o_iren;
+
+
+    sp_f1_f2_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst or haz.dec_flush) then
-                dec.instret_incr       <= '0'; 
-                dec.ms_irq_pulse       <= '0'; 
-                dec.mt_irq_pulse       <= '0'; 
-                dec.me_irq_pulse       <= '0'; 
-                dec.instr_adr_ma_excpt <= '0'; 
-                dec.instr_access_excpt <= '0'; 
-                dec.pc                 <= (others=>'-'); 
-            elsif (haz.dec_enable) then
-                dec.instret_incr       <= fet.instret_incr; 
-                dec.ms_irq_pulse       <= fet.ms_irq_pulse;
-                dec.mt_irq_pulse       <= fet.mt_irq_pulse;
-                dec.me_irq_pulse       <= fet.me_irq_pulse;
-                dec.instr_adr_ma_excpt <= fet.instr_adr_ma_excpt;
-                dec.instr_access_excpt <= fet.instr_access_excpt;
-                dec.pc                 <= fet.last_pc; 
+            if (i_rst or hz.f2_flush) then
+                f2.pc                <= (others=>'-');
+                f2.trap.ms_irq       <= '0';
+                f2.trap.mt_irq       <= '0';
+                f2.trap.me_irq       <= '0';
+                f2.trap.instr_adr_ma <= '0'; 
+                f2.instr             <= (others=>'-');
+            elsif (hz.dec_enable) then
+                f2.pc                <= f1.pc;
+                f2.trap.ms_irq       <= f1.trap.ms_irq;
+                f2.trap.mt_irq       <= f1.trap.mt_irq;
+                f2.trap.me_irq       <= f1.trap.me_irq;
+                f2.trap.instr_adr_ma <= f1.trap.instr_adr_ma; 
+                f2.instr             <= i_irdat; 
+            end if;
+        end if;
+    end process;
+
+
+    -- =========================================================================
+    -- Fetch 2 Stage ===========================================================
+    -- =========================================================================
+    -- Instruction data response 
+    -- This is when we find out if there was a bad or stalled memory access
+    
+    f2.trap.instr_access <= i_ierror; 
+    f2.valid <= i_iack; 
+
+
+    sp_f2_id_regs : process (i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_rst or hz.id_flush or not f2.valid) then
+                id.pc                <= (others=>'-'); 
+                id.valid             <= '0'; 
+                id.trap.ms_irq       <= '0'; 
+                id.trap.mt_irq       <= '0'; 
+                id.trap.me_irq       <= '0'; 
+                id.trap.instr_adr_ma <= '0'; 
+                id.trap.instr_access <= '0'; 
+                id.instr             <= (others=>'-'); 
+            elsif (hz.id_enable) then
+                id.pc                <= f2.pc;          
+                id.valid             <= f2.valid;           
+                id.trap.ms_irq       <= f2.trap.ms_irq;       
+                id.trap.mt_irq       <= f2.trap.mt_irq;       
+                id.trap.me_irq       <= f2.trap.me_irq;       
+                id.trap.instr_adr_ma <= f2.trap.instr_adr_ma; 
+                id.trap.instr_access <= f2.trap.instr_access; 
+                id.instr             <= f2.instr; 
             end if;
         end if;
     end process;
@@ -234,48 +284,22 @@ begin
     -- =========================================================================
     -- Decode Stage ============================================================
     -- =========================================================================
-    
-    -- Selects the last instruction on a stall of this stage
-    -- Needed because the instruction comes one cycle late. 
-    -- Probably losing performance by having the BRAM data go directly to the 
-    -- decode stage. Consider adding another fetch stage to register the instruction 
-    -- before decoding. 
-    sfet_dec_regs : process (i_clk)
-    begin
-        if rising_edge(i_clk) then
-            if (i_rst) then
-                dec.last_instr  <= (others=>'-'); 
-                dec.last_dec_en <= '1';
-            else 
-                dec.last_instr  <= dec.instr; 
-                dec.last_dec_en <= haz.dec_enable;
-            end if; 
-        end if;
-    end process;
-    dec.instr <= dec.irdat when dec.last_dec_en else dec.last_instr; 
-    
-    dec.opcode   <= dec.instr(RANGE_OPCODE);
-    dec.rs1_adr  <= dec.instr(RANGE_RS1);
-    dec.rs2_adr  <= dec.instr(RANGE_RS2);
-    dec.rdst_adr <= dec.instr(RANGE_RD);
-    dec.funct3   <= dec.instr(RANGE_FUNCT3);
-    dec.funct7   <= dec.instr(RANGE_FUNCT7);
+    id.opcode   <= id.instr(RANGE_OPCODE);
+    id.rs1_adr  <= id.instr(RANGE_RS1);
+    id.rs2_adr  <= id.instr(RANGE_RS2);
+    id.rdst_adr <= id.instr(RANGE_RD);
+    id.funct3   <= id.instr(RANGE_FUNCT3);
+    id.funct7   <= id.instr(RANGE_FUNCT7);
 
 
     -- Register File -----------------------------------------------------------
     -- -------------------------------------------------------------------------
-    -- On a write, reads should output what was written 
-    -- What happens when a register is read and written in the same clock
-    -- cycle? We assume that the write is in the first half of the clock cycle and the read
-    -- is in the second half, so the read delivers what is written.
-    -- Thats from the patterson book. I'm not going to assme that. I'll have to stall by one 
-    -- cycle if this is the case. 
     -- Sync Writes
     sp_regfile_write : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" then
-                dec.regfile(to_integer(unsigned(wrb.rdst_adr))) <= wrb.rdst_dat; 
+            if wb.ctrl.reg_wr = '1' and wb.rdst_adr /= b"00000" then
+                id.regfile(to_integer(unsigned(wb.rdst_adr))) <= wb.rdst_dat; 
             end if; 
         end if;
     end process;
@@ -283,16 +307,16 @@ begin
     -- Async Reads. Needs to be async so I can handle branch resolution in dec stage.
     ap_regfile_read : process (all)
     begin
-        if dec.rs1_adr = b"00000" then
-            dec.rs1_dat <= (others=>'0');
+        if id.rs1_adr = b"00000" then
+            id.rs1_dat <= (others=>'0');
         else
-            dec.rs1_dat <= dec.regfile(to_integer(unsigned(dec.rs1_adr)));
+            id.rs1_dat <= id.regfile(to_integer(unsigned(id.rs1_adr)));
         end if;
 
-        if dec.rs2_adr = b"00000" then
-            dec.rs2_dat <= (others=>'0');
+        if id.rs2_adr = b"00000" then
+            id.rs2_dat <= (others=>'0');
         else
-            dec.rs2_dat <= dec.regfile(to_integer(unsigned(dec.rs2_adr)));
+            id.rs2_dat <= id.regfile(to_integer(unsigned(id.rs2_adr)));
         end if;
     end process;
 
@@ -301,261 +325,273 @@ begin
     -- -------------------------------------------------------------------------
     ap_ctrl : process (all)
     begin
-        case (dec.opcode) is
+        case (id.opcode) is
             when OPCODE_LUI => 
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_EXE;
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0'; 
-                dec.ctrl.alu_ctrl <= ALU_CTRL_ADD; 
-                dec.ctrl.alua_sel <= ALU_A_ZERO;
-                dec.ctrl.alub_sel <= ALU_B_IMM32;
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= UTYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_EXE;
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0'; 
+                id.ctrl.alu_ctrl <= ALU_CTRL_ADD; 
+                id.ctrl.alua_sel <= ALU_A_ZERO;
+                id.ctrl.alub_sel <= ALU_B_IMM32;
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= UTYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_AUIPC => 
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_EXE;
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= ALU_CTRL_ADD; 
-                dec.ctrl.alua_sel <= ALU_A_PC;
-                dec.ctrl.alub_sel <= ALU_B_IMM32;
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= UTYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_EXE;
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= ALU_CTRL_ADD; 
+                id.ctrl.alua_sel <= ALU_A_PC;
+                id.ctrl.alub_sel <= ALU_B_IMM32;
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= UTYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_ALUI  =>
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_EXE;
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= ALU_CTRL_ALU;
-                dec.ctrl.alua_sel <= ALU_A_RS1;
-                dec.ctrl.alub_sel <= ALU_B_IMM32;
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= ITYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_EXE;
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= ALU_CTRL_ALU;
+                id.ctrl.alua_sel <= ALU_A_RS1;
+                id.ctrl.alub_sel <= ALU_B_IMM32;
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= ITYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_ALUR  =>
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_EXE;
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= ALU_CTRL_ALU;
-                dec.ctrl.alua_sel <= ALU_A_RS1;
-                dec.ctrl.alub_sel <= ALU_B_RS2;
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= RTYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_EXE;
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= ALU_CTRL_ALU;
+                id.ctrl.alua_sel <= ALU_A_RS1;
+                id.ctrl.alub_sel <= ALU_B_RS2;
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= RTYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_JAL  =>  
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_PC4; 
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= '-';  
-                dec.ctrl.alua_sel <= b"--";   
-                dec.ctrl.alub_sel <= '-'; 
-                dec.ctrl.jal      <= '1';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= JTYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_PC4; 
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= '-';  
+                id.ctrl.alua_sel <= b"--";   
+                id.ctrl.alub_sel <= '-'; 
+                id.ctrl.jal      <= '1';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= JTYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_JALR =>  
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_PC4; 
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= '-';  
-                dec.ctrl.alua_sel <= b"--";  
-                dec.ctrl.alub_sel <= '-'; 
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '1';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= ITYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_PC4; 
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= '-';  
+                id.ctrl.alua_sel <= b"--";  
+                id.ctrl.alub_sel <= '-'; 
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '1';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= ITYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_BRANCH =>
-                dec.ctrl.reg_wr   <= '0';
-                dec.ctrl.wrb_sel  <= b"--";
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= '-';  
-                dec.ctrl.alua_sel <= b"--";
-                dec.ctrl.alub_sel <= '-'; 
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '1';
-                dec.ctrl.imm_type <= BTYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '0';
+                id.ctrl.wrb_sel  <= b"--";
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= '-';  
+                id.ctrl.alua_sel <= b"--";
+                id.ctrl.alub_sel <= '-'; 
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '1';
+                id.ctrl.imm_type <= BTYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_LOAD =>
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_MEM;
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '1';
-                dec.ctrl.alu_ctrl <= ALU_CTRL_ADD;
-                dec.ctrl.alua_sel <= ALU_A_RS1;
-                dec.ctrl.alub_sel <= ALU_B_IMM32;
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= ITYPE;
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_MEM;
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '1';
+                id.ctrl.alu_ctrl <= ALU_CTRL_ADD;
+                id.ctrl.alua_sel <= ALU_A_RS1;
+                id.ctrl.alub_sel <= ALU_B_IMM32;
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= ITYPE;
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_STORE =>
-                dec.ctrl.reg_wr   <= '0';
-                dec.ctrl.wrb_sel  <= b"--";
-                dec.ctrl.mem_wr   <= '1';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= ALU_CTRL_ADD;
-                dec.ctrl.alua_sel <= ALU_A_RS1;
-                dec.ctrl.alub_sel <= ALU_B_IMM32;
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= STYPE; 
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '0';
+                id.ctrl.wrb_sel  <= b"--";
+                id.ctrl.mem_wr   <= '1';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= ALU_CTRL_ADD;
+                id.ctrl.alua_sel <= ALU_A_RS1;
+                id.ctrl.alub_sel <= ALU_B_IMM32;
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= STYPE; 
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when OPCODE_FENCE =>
-                dec.ctrl.reg_wr   <= '0';
-                dec.ctrl.wrb_sel  <= b"--";
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= '-';  
-                dec.ctrl.alua_sel <= b"--";
-                dec.ctrl.alub_sel <= '-'; 
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= b"---"; 
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '1';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '0';
+                id.ctrl.wrb_sel  <= b"--";
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= '-';  
+                id.ctrl.alua_sel <= b"--";
+                id.ctrl.alub_sel <= '-'; 
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= b"---"; 
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '1';
+                id.ctrl.illegal  <= '0'; 
     
             -- NOTE: csr, ecall, ebreak, mret, and wfi instructions. 
             -- only csr uses reg wr = '1', but its okay that this is set to 1 for the other
             -- instructions because they have their rs1 and rdst fields set to 0, meaning 
             -- that no write will actually happen and forwarding will not get triggered.
             when OPCODE_SYSTEM =>
-                dec.ctrl.reg_wr   <= '1';
-                dec.ctrl.wrb_sel  <= WRB_SEL_EXE;
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= '-';  
-                dec.ctrl.alua_sel <= b"--";
-                dec.ctrl.alub_sel <= '-'; 
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= ITYPE; 
-                dec.ctrl.sys      <= '1'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '0'; 
+                id.ctrl.reg_wr   <= '1';
+                id.ctrl.wrb_sel  <= WRB_SEL_EXE;
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= '-';  
+                id.ctrl.alua_sel <= b"--";
+                id.ctrl.alub_sel <= '-'; 
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= ITYPE; 
+                id.ctrl.sys      <= '1'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '0'; 
     
             when others =>
-                dec.ctrl.reg_wr   <= '0';
-                dec.ctrl.wrb_sel  <= b"--";
-                dec.ctrl.mem_wr   <= '0';
-                dec.ctrl.mem_rd   <= '0';
-                dec.ctrl.alu_ctrl <= '-';  
-                dec.ctrl.alua_sel <= b"--";
-                dec.ctrl.alub_sel <= '-'; 
-                dec.ctrl.jal      <= '0';
-                dec.ctrl.jalr     <= '0';
-                dec.ctrl.branch   <= '0';
-                dec.ctrl.imm_type <= b"---"; 
-                dec.ctrl.sys      <= '0'; 
-                dec.ctrl.fence    <= '0';
-                dec.ctrl.illegal  <= '1'; 
+                id.ctrl.reg_wr   <= '0';
+                id.ctrl.wrb_sel  <= b"--";
+                id.ctrl.mem_wr   <= '0';
+                id.ctrl.mem_rd   <= '0';
+                id.ctrl.alu_ctrl <= '-';  
+                id.ctrl.alua_sel <= b"--";
+                id.ctrl.alub_sel <= '-'; 
+                id.ctrl.jal      <= '0';
+                id.ctrl.jalr     <= '0';
+                id.ctrl.branch   <= '0';
+                id.ctrl.imm_type <= b"---"; 
+                id.ctrl.sys      <= '0'; 
+                id.ctrl.fence    <= '0';
+                id.ctrl.illegal  <= '1'; 
         end case; 
     end process;
 
     -- Illegal instruction exception
-    dec.illeg_instr_excpt <= dec.ctrl.illegal and dec.instret_incr;
+    id.illeg_instr_excpt <= id.ctrl.illegal and id.instret_incr;
  
 
     -- Construct the 32-bit signed immediate
     -- NOTE: could add another decode stage to process this since it happens after opcode decoder
     ap_imm32 : process (all) 
     begin
-        case (dec.ctrl.imm_type) is
+        case (id.ctrl.imm_type) is
             when (STYPE) => 
-                dec.imm32(31 downto 12) <= (others=>dec.instr(31));
-                dec.imm32(11 downto 5)  <= dec.instr(RANGE_IMM_S_11_5);
-                dec.imm32(4 downto 0)   <= dec.instr(RANGE_IMM_S_4_0);
+                id.imm32(31 downto 12) <= (others=>id.instr(31));
+                id.imm32(11 downto 5)  <= id.instr(RANGE_IMM_S_11_5);
+                id.imm32(4 downto 0)   <= id.instr(RANGE_IMM_S_4_0);
 
             when (BTYPE) => 
-                dec.imm32(31 downto 13) <= (others=>dec.instr(31));
-                dec.imm32(12)           <= dec.instr(RANGE_IMM_B_12);
-                dec.imm32(11)           <= dec.instr(RANGE_IMM_B_11);
-                dec.imm32(10 downto 5)  <= dec.instr(RANGE_IMM_B_10_5);
-                dec.imm32(4 downto 1)   <= dec.instr(RANGE_IMM_B_4_1);
-                dec.imm32(0)            <= '0';
+                id.imm32(31 downto 13) <= (others=>id.instr(31));
+                id.imm32(12)           <= id.instr(RANGE_IMM_B_12);
+                id.imm32(11)           <= id.instr(RANGE_IMM_B_11);
+                id.imm32(10 downto 5)  <= id.instr(RANGE_IMM_B_10_5);
+                id.imm32(4 downto 1)   <= id.instr(RANGE_IMM_B_4_1);
+                id.imm32(0)            <= '0';
 
             when (UTYPE) => 
-                dec.imm32(31 downto 12) <= dec.instr(RANGE_IMM_U);
-                dec.imm32(11 downto 0)  <= X"000";
+                id.imm32(31 downto 12) <= id.instr(RANGE_IMM_U);
+                id.imm32(11 downto 0)  <= X"000";
 
             when (JTYPE) => 
-                dec.imm32(31 downto 21) <= (others=>dec.instr(31));
-                dec.imm32(20)           <= dec.instr(RANGE_IMM_J_20);
-                dec.imm32(19 downto 12) <= dec.instr(RANGE_IMM_J_19_12);
-                dec.imm32(11)           <= dec.instr(RANGE_IMM_J_11);
-                dec.imm32(10 downto 1)  <= dec.instr(RANGE_IMM_J_10_1);
-                dec.imm32(0)            <= '0';
+                id.imm32(31 downto 21) <= (others=>id.instr(31));
+                id.imm32(20)           <= id.instr(RANGE_IMM_J_20);
+                id.imm32(19 downto 12) <= id.instr(RANGE_IMM_J_19_12);
+                id.imm32(11)           <= id.instr(RANGE_IMM_J_11);
+                id.imm32(10 downto 1)  <= id.instr(RANGE_IMM_J_10_1);
+                id.imm32(0)            <= '0';
             
             when others  => -- ITYPE
-                dec.imm32(31 downto 12) <= (others=>dec.instr(31));
-                dec.imm32(11 downto 0)  <= dec.instr(RANGE_IMM_I);
+                id.imm32(31 downto 12) <= (others=>id.instr(31));
+                id.imm32(11 downto 0)  <= id.instr(RANGE_IMM_I);
 
        end case; 
     end process; 
 
+
     -- Forwarding Muxes
     ap_dec_fw_sel : process (all) 
     begin 
-        case (haz.dec_fw_rs1_sel) is 
-            when WRB_FW => dec.dec_fw_rs1_dat <= wrb.rdst_dat;
-            when MEM_FW => dec.dec_fw_rs1_dat <= mem.exe_rslt;
-            when others => dec.dec_fw_rs1_dat <= dec.rs1_dat;
-        end case; 
+        if (m1.ctrl.reg_wr = '1' and m1.rdst_adr /= b"00000" and m1.rdst_adr = id.rs1_adr) then
+            id.dec_fw_rs1_dat <= m1.exe_rslt;
+        elsif (m2.ctrl.reg_wr = '1' and m2.rdst_adr /= b"00000" and m2.rdst_adr = id.rs1_adr) then
+            id.dec_fw_rs1_dat <= wb.rdst_dat;
+        elsif (wb.ctrl.reg_wr = '1' and wb.rdst_adr /= b"00000" and wb.rdst_adr = id.rs1_adr) then
+            id.dec_fw_rs1_dat <= wb.rdst_dat;
+        else 
+            id.dec_fw_rs1_dat <= id.rs1_dat;
+        end if; 
 
-        case (haz.dec_fw_rs2_sel) is 
-            when WRB_FW => dec.dec_fw_rs2_dat <= wrb.rdst_dat;
-            when MEM_FW => dec.dec_fw_rs2_dat <= mem.exe_rslt;
-            when others => dec.dec_fw_rs2_dat <= dec.rs2_dat;
-        end case; 
+        if (m1.ctrl.reg_wr = '1' and m1.rdst_adr /= b"00000" and m1.rdst_adr = id.rs2_adr) then
+            id.dec_fw_rs2_dat <= m1.exe_rslt;
+        elsif (m2.ctrl.reg_wr = '1' and m2.rdst_adr /= b"00000" and m2.rdst_adr = id.rs2_adr) then
+            id.dec_fw_rs2_dat <= wb.rdst_dat;
+        elsif (wb.ctrl.reg_wr = '1' and wb.rdst_adr /= b"00000" and wb.rdst_adr = id.rs2_adr) then
+            id.dec_fw_rs2_dat <= wb.rdst_dat;
+        else 
+            id.dec_fw_rs2_dat <= id.rs2_dat;
+        end if; 
     end process; 
+
+
+    
 
 
     -- determine if a branch was taken and calculate the target address for 
@@ -569,33 +605,33 @@ begin
         variable v_brt_adr : std_logic_vector(31 downto 0);
     begin
 
-        dec.br_eq  <= '1' when dec.dec_fw_rs1_dat = dec.dec_fw_rs2_dat else '0'; 
-        dec.br_ltu <= '1' when unsigned(dec.dec_fw_rs1_dat) < unsigned(dec.dec_fw_rs2_dat) else '0'; 
-        dec.br_lt  <= '1' when signed(dec.dec_fw_rs1_dat) < signed(dec.dec_fw_rs2_dat) else '0'; 
+        id.br_eq  <= '1' when id.dec_fw_rs1_dat = id.dec_fw_rs2_dat else '0'; 
+        id.br_ltu <= '1' when unsigned(id.dec_fw_rs1_dat) < unsigned(id.dec_fw_rs2_dat) else '0'; 
+        id.br_lt  <= '1' when signed(id.dec_fw_rs1_dat) < signed(id.dec_fw_rs2_dat) else '0'; 
 
-        case (dec.funct3) is 
-            when F3_BEQ  => dec.branch <=     dec.br_eq; 
-            when F3_BNE  => dec.branch <= not dec.br_eq; 
-            when F3_BLT  => dec.branch <=     dec.br_lt;
-            when F3_BGE  => dec.branch <= not dec.br_lt;
-            when F3_BLTU => dec.branch <=     dec.br_ltu;
-            when F3_BGEU => dec.branch <= not dec.br_ltu;
-            when others  => dec.branch <= '0';
+        case (id.funct3) is 
+            when F3_BEQ  => id.branch <=     id.br_eq; 
+            when F3_BNE  => id.branch <= not id.br_eq; 
+            when F3_BLT  => id.branch <=     id.br_lt;
+            when F3_BGE  => id.branch <= not id.br_lt;
+            when F3_BLTU => id.branch <=     id.br_ltu;
+            when F3_BGEU => id.branch <= not id.br_ltu;
+            when others  => id.branch <= '0';
         end case; 
       
 
         -- Control signal indicating that a branch, jal, or jalr has been taken
-        dec.br_taken <= dec.ctrl.jal or dec.ctrl.jalr or (dec.ctrl.branch and dec.branch);
+        id.br_taken <= id.ctrl.jal or id.ctrl.jalr or (id.ctrl.branch and id.branch);
 
         -- Branch, jal, or jalr target address
-        if dec.ctrl.jalr then
-            v_brt_adr := std_logic_vector(signed(dec.imm32) + signed(dec.dec_fw_rs1_dat)); 
+        if id.ctrl.jalr then
+            v_brt_adr := std_logic_vector(signed(id.imm32) + signed(id.dec_fw_rs1_dat)); 
             v_brt_adr := v_brt_adr(31 downto 1) & '0';
         else
-            v_brt_adr :=  std_logic_vector(signed(dec.imm32) + signed(dec.pc)); 
+            v_brt_adr :=  std_logic_vector(signed(id.imm32) + signed(id.pc)); 
         end if;   
 
-        dec.brt_adr <= v_brt_adr; 
+        id.brt_adr <= v_brt_adr; 
 
     end process;
 
@@ -604,102 +640,106 @@ begin
     -- -------------------------------------------------------------------------
     ap_system : process (all)
     begin
-        dec.ecall_excpt  <= '0'; 
-        dec.ebreak_excpt <= '0'; 
-        dec.mret         <= '0';
-        dec.wfi          <= '0';
-        dec.csr_access   <= '0'; 
+        id.trap.ecall  <= '0'; 
+        id.trap.ebreak <= '0'; 
+        id.mret        <= '0';
+        id.wfi         <= '0';
+        id.csr_access  <= '0'; 
 
-        if (dec.ctrl.sys) then
-            if (dec.funct3 = F3_ENV) then
-                case (dec.imm32(11 downto 0)) is 
-                    when F12_ECALL  => dec.ecall_excpt  <= '1'; 
-                    when F12_EBREAK => dec.ebreak_excpt <= '1'; 
-                    when F12_MRET   => dec.mret         <= '1';
-                    when F12_WFI    => dec.wfi          <= '1';
+        if (id.ctrl.sys) then
+            if (id.funct3 = F3_ENV) then
+                case (id.imm32(11 downto 0)) is 
+                    when F12_ECALL  => id.trap.ecall  <= '1'; 
+                    when F12_EBREAK => id.trap.ebreak <= '1'; 
+                    when F12_MRET   => id.mret        <= '1';
+                    when F12_WFI    => id.wfi         <= '1';
                     when others     => null;
                 end case; 
             else 
-                dec.csr_access <= '1'; 
+                id.csr_access <= '1'; 
             end if;
         end if; 
     end process;
 
     -- Fence Instructions ------------------------------------------------------
     -- -------------------------------------------------------------------------
-    dec.fence  <= '1' when dec.ctrl.fence = '1' and dec.funct3 = F3_FENCE  else '0'; 
-    dec.fencei <= '1' when dec.ctrl.fence = '1' and dec.funct3 = F3_FENCEI else '0';
-    o_fence   <= dec.fence;  
-    o_fencei  <= dec.fencei;
+    id.fence  <= '1' when id.ctrl.fence = '1' and id.funct3 = F3_FENCE  else '0'; 
+    id.fencei <= '1' when id.ctrl.fence = '1' and id.funct3 = F3_FENCEI else '0';
+    o_fence   <= id.fence;  
+    o_fencei  <= id.fencei;
 
 
     -- =========================================================================
     -- Decode/Execute Registers ================================================
     -- =========================================================================
-    sp_dec_exe_regs : process (i_clk)
+    sp_id_ex_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
             -- We also explicitly flush this stage on the next cycle after last stage was flushed 
             -- this is necessary because the control signals generated in the decode 
             -- stage cannot be flushed the same cycle they are created. 
-            if (i_rst or haz.exe_flush or not dec.instret_incr) then
-                exe.instret_incr       <= '0'; 
-                exe.ms_irq_pulse       <= '0'; 
-                exe.mt_irq_pulse       <= '0'; 
-                exe.me_irq_pulse       <= '0'; 
-                exe.instr_adr_ma_excpt <= '0'; 
-                exe.instr_access_excpt <= '0'; 
-                exe.illeg_instr_excpt  <= '0'; 
-                exe.ecall_excpt        <= '0'; 
-                exe.ebreak_excpt       <= '0'; 
-                exe.ctrl.reg_wr        <= '0'; 
-                exe.ctrl.wrb_sel       <= (others=>'-');
-                exe.ctrl.mem_wr        <= '0'; 
-                exe.ctrl.mem_rd        <= '0'; 
-                exe.ctrl.alu_ctrl      <= '-';
-                exe.ctrl.alua_sel      <= (others=>'-');
-                exe.ctrl.alub_sel      <= '-';
-                exe.csr_access         <= '0';
-                exe.pc                 <= (others=>'-');
-                exe.rs1_adr            <= (others=>'-');
-                exe.rs2_adr            <= (others=>'-');
-                exe.rdst_adr           <= (others=>'-');
-                exe.rs1_dat            <= (others=>'-');
-                exe.rs2_dat            <= (others=>'-');
-                exe.imm32              <= (others=>'-');
-                exe.funct3             <= (others=>'-');
-                exe.funct7             <= (others=>'-');
-                exe.is_rtype           <= '-';
-            elsif (haz.exe_enable) then
-                exe.instret_incr       <= dec.instret_incr; 
-                exe.ms_irq_pulse       <= dec.ms_irq_pulse;
-                exe.mt_irq_pulse       <= dec.mt_irq_pulse;
-                exe.me_irq_pulse       <= dec.me_irq_pulse;
-                exe.instr_adr_ma_excpt <= dec.instr_adr_ma_excpt;
-                exe.instr_access_excpt <= dec.instr_access_excpt;
-                exe.illeg_instr_excpt  <= dec.illeg_instr_excpt;
-                exe.ecall_excpt        <= dec.ecall_excpt;
-                exe.ebreak_excpt       <= dec.ebreak_excpt;
-                exe.ctrl.reg_wr        <= dec.ctrl.reg_wr;
-                exe.ctrl.wrb_sel       <= dec.ctrl.wrb_sel;
-                exe.ctrl.mem_wr        <= dec.ctrl.mem_wr;
-                exe.ctrl.mem_rd        <= dec.ctrl.mem_rd;
-                exe.ctrl.alu_ctrl      <= dec.ctrl.alu_ctrl;
-                exe.ctrl.alua_sel      <= dec.ctrl.alua_sel;
-                exe.ctrl.alub_sel      <= dec.ctrl.alub_sel;
-                exe.csr_access         <= dec.csr_access;
-                exe.pc                 <= dec.pc;
-                exe.rs1_adr            <= dec.rs1_adr;
-                exe.rs2_adr            <= dec.rs2_adr;
-                exe.rdst_adr           <= dec.rdst_adr;
-                exe.rs1_dat            <= dec.dec_fw_rs1_dat;
-                exe.rs2_dat            <= dec.dec_fw_rs2_dat;
-                exe.imm32              <= dec.imm32; 
-                exe.funct3             <= dec.funct3;
-                exe.funct7             <= dec.funct7;
-                exe.mret               <= dec.mret; 
+            if (i_rst or hz.exe_flush or not id.valid) then
+                ex.pc                <= (others=>'-'); 
+                ex.valid             <= '0'; 
+                ex.trap.ms_irq       <= '0'; 
+                ex.trap.mt_irq       <= '0'; 
+                ex.trap.me_irq       <= '0'; 
+                ex.trap.instr_adr_ma <= '0'; 
+                ex.trap.instr_access <= '0'; 
+                ex.trap.illeg_instr  <= '0'; 
+                ex.trap.ecall        <= '0'; 
+                ex.trap.ebreak       <= '0'; 
+                ex.ctrl.reg_wr       <= '0'; 
+                ex.ctrl.wrb_sel      <= (others=>'-');
+                ex.ctrl.mem_wr       <= '0'; 
+                ex.ctrl.mem_rd       <= '0'; 
+                ex.ctrl.alu_ctrl     <= '-';
+                ex.ctrl.alua_sel     <= (others=>'-');
+                ex.ctrl.alub_sel     <= '-';
+                ex.csr_access        <= '0';
+                ex.rs1_adr           <= (others=>'-');
+                ex.rs2_adr           <= (others=>'-');
+                ex.rdst_adr          <= (others=>'-');
+                ex.rs1_dat           <= (others=>'-');
+                ex.rs2_dat           <= (others=>'-');
+                ex.imm32             <= (others=>'-');
+                ex.funct3            <= (others=>'-');
+                ex.funct7            <= (others=>'-');
+                ex.is_rtype          <= '-';
+                ex.mret <= '0';
+                ex.wfi  <= '0';
+            elsif (hz.exe_enable) then
+                ex.instret_incr       <= id.instret_incr; 
+                ex.ms_irq_pulse       <= id.ms_irq_pulse;
+                ex.mt_irq_pulse       <= id.mt_irq_pulse;
+                ex.me_irq_pulse       <= id.me_irq_pulse;
+                ex.instr_adr_ma_excpt <= id.instr_adr_ma_excpt;
+                ex.instr_access_excpt <= id.instr_access_excpt;
+                ex.illeg_instr_excpt  <= id.illeg_instr_excpt;
+                ex.ecall_excpt        <= id.ecall_excpt;
+                ex.ebreak_excpt       <= id.ebreak_excpt;
+                ex.ctrl.reg_wr        <= id.ctrl.reg_wr;
+                ex.ctrl.wrb_sel       <= id.ctrl.wrb_sel;
+                ex.ctrl.mem_wr        <= id.ctrl.mem_wr;
+                ex.ctrl.mem_rd        <= id.ctrl.mem_rd;
+                ex.ctrl.alu_ctrl      <= id.ctrl.alu_ctrl;
+                ex.ctrl.alua_sel      <= id.ctrl.alua_sel;
+                ex.ctrl.alub_sel      <= id.ctrl.alub_sel;
+                ex.csr_access         <= id.csr_access;
+                ex.pc                 <= id.pc;
+                ex.rs1_adr            <= id.rs1_adr;
+                ex.rs2_adr            <= id.rs2_adr;
+                ex.rdst_adr           <= id.rdst_adr;
+                ex.rs1_dat            <= id.dec_fw_rs1_dat;
+                ex.rs2_dat            <= id.dec_fw_rs2_dat;
+                ex.imm32              <= id.imm32; 
+                ex.funct3             <= id.funct3;
+                ex.funct7             <= id.funct7;
+                ex.mret               <= id.mret; 
                 -- Is this an R-Type instruction? Used for making alu opcode.
-                exe.is_rtype <= '1' when dec.ctrl.imm_type = RTYPE else '0';
+                ex.is_rtype <= '1' when id.ctrl.imm_type = RTYPE else '0';
+                ex.mret <= id.mret;
+                ex.wfi  <= id.wfi;
             end if; 
         end if;
     end process;
@@ -709,19 +749,29 @@ begin
     -- =========================================================================
    
     -- Forwarding Muxes
-    ap_exe_fw_sel : process (all) 
+    ap_ex_fw_sel : process (all) 
     begin 
-        case (haz.exe_fw_rs1_sel) is 
-            when WRB_FW => exe.exe_fw_rs1_dat <= wrb.rdst_dat;
-            when MEM_FW => exe.exe_fw_rs1_dat <= mem.exe_rslt;
-            when others => exe.exe_fw_rs1_dat <= exe.rs1_dat;
-        end case; 
 
-        case (haz.exe_fw_rs2_sel) is 
-            when WRB_FW => exe.exe_fw_rs2_dat <= wrb.rdst_dat;
-            when MEM_FW => exe.exe_fw_rs2_dat <= mem.exe_rslt;
-            when others => exe.exe_fw_rs2_dat <= exe.rs2_dat;
-        end case; 
+        if    (m1.ctrl.reg_wr = '1' and m1.rdst_adr /= b"00000" and m1.rdst_adr = ex.rs1_adr) then
+            ex.ex_fw_rs1_dat <= m1.exe_rslt;
+        elsif (m2.ctrl.reg_wr = '1' and m2.rdst_adr /= b"00000" and m2.rdst_adr = ex.rs1_adr) then
+            ex.ex_fw_rs1_dat <= m2.exe_rslt;
+        elsif (wb.ctrl.reg_wr = '1' and wb.rdst_adr /= b"00000" and wb.rdst_adr = ex.rs1_adr) then
+            ex.ex_fw_rs1_dat <= wb.rdst_dat;
+        else 
+            ex.ex_fw_rs1_dat <= ex.rs1_dat;
+        end if; 
+
+        if    (m1.ctrl.reg_wr = '1' and m1.rdst_adr /= b"00000" and m1.rdst_adr = ex.rs2_adr) then
+            ex.ex_fw_rs2_dat <= m1.exe_rslt;
+        elsif (m2.ctrl.reg_wr = '1' and m2.rdst_adr /= b"00000" and m2.rdst_adr = ex.rs2_adr) then
+            ex.ex_fw_rs2_dat <= m2.exe_rslt;
+        elsif (wb.ctrl.reg_wr = '1' and wb.rdst_adr /= b"00000" and wb.rdst_adr = ex.rs2_adr) then
+            ex.ex_fw_rs2_dat <= wb.rdst_dat;
+        else 
+            ex.ex_fw_rs2_dat <= ex.rs2_dat;
+        end if; 
+
     end process; 
 
     -- Integer ALU -------------------------------------------------------------
@@ -729,90 +779,90 @@ begin
     ap_int_alu: process (all) 
     begin 
         -- Select the first ALU operand
-        case (exe.ctrl.alua_sel) is 
-            when ALU_A_RS1     => exe.alua_dat <= exe.exe_fw_rs1_dat; 
-            when ALU_A_PC      => exe.alua_dat <= exe.pc; 
-            when ALU_A_ZERO    => exe.alua_dat <= (others=>'0'); 
-            when others        => exe.alua_dat <= (others=>'-'); 
+        case (ex.ctrl.alua_sel) is 
+            when ALU_A_RS1     => ex.alua_dat <= ex.exe_fw_rs1_dat; 
+            when ALU_A_PC      => ex.alua_dat <= ex.pc; 
+            when ALU_A_ZERO    => ex.alua_dat <= (others=>'0'); 
+            when others        => ex.alua_dat <= (others=>'-'); 
         end case; 
 
         -- Select the second ALU operand
-        case (exe.ctrl.alub_sel) is 
-            when ALU_B_RS2   => exe.alub_dat <= exe.exe_fw_rs2_dat; 
-            when ALU_B_IMM32 => exe.alub_dat <= exe.imm32; 
-            when others      => exe.alub_dat <= (others=>'-'); 
+        case (ex.ctrl.alub_sel) is 
+            when ALU_B_RS2   => ex.alub_dat <= ex.exe_fw_rs2_dat; 
+            when ALU_B_IMM32 => ex.alub_dat <= ex.imm32; 
+            when others      => ex.alub_dat <= (others=>'-'); 
         end case;
 
-        -- Build the aluop
-        case (exe.ctrl.alu_ctrl) is 
+        -- Build the aluop TODO: TODO: Experiment with adding this to decode stage to balance stage work 
+        case (ex.ctrl.alu_ctrl) is 
             when ALU_CTRL_ADD => 
-                exe.aluop <= ALUOP_ADD;  
+                ex.aluop <= ALUOP_ADD;  
 
             when ALU_CTRL_ALU => 
-                case (exe.funct3) is
+                case (ex.funct3) is
                     when F3_SUBADD =>
-                        if (exe.is_rtype and exe.funct7(5)) then
-                            exe.aluop <= ALUOP_SUB;
+                        if (ex.is_rtype and ex.funct7(5)) then
+                            ex.aluop <= ALUOP_SUB;
                         else
-                            exe.aluop <= ALUOP_ADD;
+                            ex.aluop <= ALUOP_ADD;
                         end if;
 
                     when F3_SR =>
-                        if (exe.funct7(5)) then
-                            exe.aluop <= ALUOP_SRA;
+                        if (ex.funct7(5)) then
+                            ex.aluop <= ALUOP_SRA;
                         else
-                            exe.aluop <= ALUOP_SRL;
+                            ex.aluop <= ALUOP_SRL;
                         end if; 
 
-                    when F3_SLL => exe.aluop <= ALUOP_SLL ;
-                    when F3_SLT => exe.aluop <= ALUOP_SLT ;  
-                    when F3_SLTU=> exe.aluop <= ALUOP_SLTU;  
-                    when F3_XOR => exe.aluop <= ALUOP_XOR ;   
-                    when F3_OR  => exe.aluop <= ALUOP_OR  ; 
-                    when F3_AND => exe.aluop <= ALUOP_AND ; 
-                    when others => exe.aluop <= (others=>'-'); 
+                    when F3_SLL => ex.aluop <= ALUOP_SLL ;
+                    when F3_SLT => ex.aluop <= ALUOP_SLT ;  
+                    when F3_SLTU=> ex.aluop <= ALUOP_SLTU;  
+                    when F3_XOR => ex.aluop <= ALUOP_XOR ;   
+                    when F3_OR  => ex.aluop <= ALUOP_OR  ; 
+                    when F3_AND => ex.aluop <= ALUOP_AND ; 
+                    when others => ex.aluop <= (others=>'-'); 
                 end case;
-            when others => exe.aluop <= (others=>'-'); 
+            when others => ex.aluop <= (others=>'-'); 
         end case; 
 
         -- ALU
-        case (exe.aluop) is
-            when ALUOP_ADD  => exe.alu_rslt <= 
-                std_logic_vector(signed(exe.alua_dat) + signed(exe.alub_dat)); 
+        case (ex.aluop) is
+            when ALUOP_ADD  => ex.alu_rslt <= 
+                std_logic_vector(signed(ex.alua_dat) + signed(ex.alub_dat)); 
 
-            when ALUOP_SUB  => exe.alu_rslt <= 
-                std_logic_vector(signed(exe.alua_dat) - signed(exe.alub_dat));
+            when ALUOP_SUB  => ex.alu_rslt <= 
+                std_logic_vector(signed(ex.alua_dat) - signed(ex.alub_dat));
 
-            when ALUOP_SLL  => exe.alu_rslt <= 
-                std_logic_vector(shift_left(unsigned(exe.alua_dat), 
-                to_integer(unsigned(exe.alub_dat(4 downto 0)))));
+            when ALUOP_SLL  => ex.alu_rslt <= 
+                std_logic_vector(shift_left(unsigned(ex.alua_dat), 
+                to_integer(unsigned(ex.alub_dat(4 downto 0)))));
 
-            when ALUOP_SLT  => exe.alu_rslt <= 
-                x"0000_0001" when (signed(exe.alua_dat) < signed(exe.alub_dat))  
+            when ALUOP_SLT  => ex.alu_rslt <= 
+                x"0000_0001" when (signed(ex.alua_dat) < signed(ex.alub_dat))  
                 else x"0000_0000"; 
 
-            when ALUOP_SLTU => exe.alu_rslt <=
-                x"0000_0001" when (unsigned(exe.alua_dat) < unsigned(exe.alub_dat)) 
+            when ALUOP_SLTU => ex.alu_rslt <=
+                x"0000_0001" when (unsigned(ex.alua_dat) < unsigned(ex.alub_dat)) 
                 else x"0000_0000"; 
 
-            when ALUOP_XOR  => exe.alu_rslt <= 
-                exe.alua_dat xor exe.alub_dat; 
+            when ALUOP_XOR  => ex.alu_rslt <= 
+                ex.alua_dat xor ex.alub_dat; 
 
-            when ALUOP_SRL  => exe.alu_rslt <= 
-                std_logic_vector(shift_right(unsigned(exe.alua_dat), 
-                to_integer(unsigned(exe.alub_dat(4 downto 0)))));    
+            when ALUOP_SRL  => ex.alu_rslt <= 
+                std_logic_vector(shift_right(unsigned(ex.alua_dat), 
+                to_integer(unsigned(ex.alub_dat(4 downto 0)))));    
 
-            when ALUOP_SRA  => exe.alu_rslt <= 
-                std_logic_vector(shift_right(signed(exe.alua_dat),
-                to_integer(unsigned(exe.alub_dat(4 downto 0)))));
+            when ALUOP_SRA  => ex.alu_rslt <= 
+                std_logic_vector(shift_right(signed(ex.alua_dat),
+                to_integer(unsigned(ex.alub_dat(4 downto 0)))));
 
-            when ALUOP_OR   => exe.alu_rslt <= 
-                exe.alua_dat or exe.alub_dat; 
+            when ALUOP_OR   => ex.alu_rslt <= 
+                ex.alua_dat or ex.alub_dat; 
 
-            when ALUOP_AND  => exe.alu_rslt <= 
-                exe.alua_dat and exe.alub_dat; 
+            when ALUOP_AND  => ex.alu_rslt <= 
+                ex.alua_dat and ex.alub_dat; 
                 
-            when others     => exe.alu_rslt <= 
+            when others     => ex.alu_rslt <= 
                 (others=>'-');
         end case; 
     end process; 
@@ -820,47 +870,62 @@ begin
    
     -- CSR Access --------------------------------------------------------------
     -- -------------------------------------------------------------------------
+
+    ex.csr_adr <= ex.imm32(11 downto 0); 
+
+    -- Forwarding Mux
+    -- Need to forward the modified csr data because the csrs dont get written
+    -- by software till the wb stage. So the is the "effective" csr read data.
+    -- What would ahve been read assuming the preceding csr instr has updated the 
+    -- register already 
+    ap_ex_csr_fw_sel : process (all) 
+    begin 
+        case (hz.ex_fw_csr_sel) is 
+            when WB_FW  => ex.ex_fw_csr_rdat <= wb.csr_wdata;
+            when M2_FW  => ex.ex_fw_csr_rdat <= m2.csr_wdata;
+            when M1_FW  => ex.ex_fw_csr_rdat <= m1.csr_wdata;
+            when others => ex.ex_fw_csr_rdat <= ex.csr_rdata;
+        end case; 
+    end process; 
+
+
     -- Generate the csr write data (for SW writes)
     ap_csr_wdata : process (all)
     begin
-        case exe.funct3 is 
+        case ex.funct3 is 
             when F3_CSRRW =>  
-                exe.csr_wdata <= exe.exe_fw_rs1_dat;
+                ex.csr_wdata <= ex.exe_fw_rs1_dat;
 
             when F3_CSRRS =>
-                exe.csr_wdata <= exe.exe_fw_rs1_dat or exe.csr_rdata;
+                ex.csr_wdata <= ex.exe_fw_rs1_dat or ex.ex_fw_csr_rdat;
 
             when F3_CSRRC =>
-                exe.csr_wdata <= not exe.exe_fw_rs1_dat and exe.csr_rdata;
+                ex.csr_wdata <= not ex.exe_fw_rs1_dat and ex.ex_fw_csr_rdat;
 
             when F3_CSRRWI =>  
-                exe.csr_wdata(31 downto 5) <= (others=>'0');
-                exe.csr_wdata(4 downto 0)  <= exe.rs1_adr;
+                ex.csr_wdata(31 downto 5) <= (others=>'0');
+                ex.csr_wdata(4 downto 0)  <= ex.rs1_adr;
 
             when F3_CSRRSI =>
-                exe.csr_wdata(31 downto 5) <= exe.csr_rdata(31 downto 5);
-                exe.csr_wdata(4 downto 0)  <= exe.rs1_adr or exe.csr_rdata(4 downto 0);
+                ex.csr_wdata(31 downto 5) <= ex.ex_fw_csr_rdat(31 downto 5);
+                ex.csr_wdata(4 downto 0)  <= ex.rs1_adr or ex.ex_fw_csr_rdat(4 downto 0);
 
             when F3_CSRRCI =>
-                exe.csr_wdata(31 downto 5) <= (others=>'0');
-                exe.csr_wdata(4 downto 0)  <= not exe.rs1_adr and exe.csr_rdata(4 downto 0);
+                ex.csr_wdata(31 downto 5) <= (others=>'0');
+                ex.csr_wdata(4 downto 0)  <= not ex.rs1_adr and ex.ex_fw_csr_rdat(4 downto 0);
 
             when others    => 
-                exe.csr_wdata <= (others=>'-');
+                ex.csr_wdata <= (others=>'-');
         end case; 
     end process;
 
-    -- Was there a trap? 
-    -- Memory stage exceptions are forwarded to this stage. It is okay to write 
-    -- the memory stage excpetions during this execute stage without stalling 
-    -- because the instruction that the memory exception is overwriting will 
-    -- get flushed anyways due to the bad memory instruction. 
-    -- All others are generated at or before this stage.
-    exe.any_trap <= exe.ms_irq_pulse or exe.mt_irq_pulse or exe.me_irq_pulse or 
-                    mem.load_adr_ma_excpt or mem.load_access_excpt or 
-                    mem.store_adr_ma_excpt or mem.store_access_excpt or 
-                    exe.illeg_instr_excpt or exe.ecall_excpt or exe.ebreak_excpt or 
-                    exe.instr_adr_ma_excpt or exe.instr_access_excpt; 
+
+    ex.any_trap <= ex.trap.ms_irq or ex.trap.mt_irq or ex.trap.me_irq or 
+                     m1.trap.load_adr_ma or m2.trap.load_access or 
+                     m1.trap.store_adr_ma or m2.trap.store_access or 
+                     ex.trap.illeg_instr or ex.trap.ecall or ex.trap.ebreak or 
+                     ex.trap.instr_adr_ma or ex.trap.instr_access; 
+
 
     -- Writes
     sp_csr_wr : process (i_clk)
@@ -870,22 +935,22 @@ begin
                 -- These are the only CSRs that need to be reset to a specific value
                 -- All others are undefined according to the spec. This means that 
                 -- SW should initialize the undefined CSRs
-                exe.csr.mstatus_mie  <= '0';
-                exe.csr.mcause_intr  <= '0';
-                exe.csr.mcause_code  <= (others=>'0');
+                ex.csr.mstatus_mie  <= '0';
+                ex.csr.mcause_intr  <= '0';
+                ex.csr.mcause_code  <= (others=>'0');
 
                 -- These CSRs are not required to be reset by hardware
                 -- Im initializing some of them anyways for convenience
-                exe.csr.mstatus_mpie <= '0';
-                exe.csr.mie_msi      <= '0';
-                exe.csr.mie_mti      <= '0';
-                exe.csr.mie_mei      <= '0';
-                exe.csr.mip_msi      <= '0';
-                exe.csr.mip_mti      <= '0';
-                exe.csr.mip_mei      <= '0';
-                exe.csr.mepc         <= (others=>'-');
-                exe.csr.mcycle       <= (others=>'0');
-                exe.csr.minstret     <= (others=>'0');
+                ex.csr.mstatus_mpie <= '0';
+                ex.csr.mie_msi      <= '0';
+                ex.csr.mie_mti      <= '0';
+                ex.csr.mie_mei      <= '0';
+                ex.csr.mip_msi      <= '0';
+                ex.csr.mip_mti      <= '0';
+                ex.csr.mip_mei      <= '0';
+                ex.csr.mepc         <= (others=>'-');
+                ex.csr.mcycle       <= (others=>'0');
+                ex.csr.minstret     <= (others=>'0');
 
             -- SW Writes take priority over HW if both try to write on the same cycle
             else 
@@ -893,125 +958,115 @@ begin
                 -- HW writes by CPU
                 -- 
                 -- TODO: add these with FP extension 
-                --exe.csr.fflags      <= ; 
-                --exe.csr.frm         <= ; 
-                --exe.csr.fcsr        <= ; 
-                --exe.csr.mstatus(FS) <= ; 
-                --exe.csr.mstatus(SD) <= ; 
+                --ex.csr.fflags      <= ; 
+                --ex.csr.frm         <= ; 
+                --ex.csr.fcsr        <= ; 
+                --ex.csr.mstatus(FS) <= ; 
+                --ex.csr.mstatus(SD) <= ; 
                 
-                exe.csr.mip_msi <= i_ms_irq;
-                exe.csr.mip_mti <= i_me_irq;
-                exe.csr.mip_mei <= i_mt_irq;
+                ex.csr.mip_msi <= i_ms_irq;
+                ex.csr.mip_mti <= i_me_irq;
+                ex.csr.mip_mei <= i_mt_irq;
 
-                exe.csr.mcycle   <= cnt.mcycle; 
-                exe.csr.minstret <= cnt.minstret; 
-
-                -- Set Previous IE status on a trap 
-                if (exe.any_trap) then
-                    exe.csr.mstatus_mpie     <= exe.csr.mstatus_mie;
-                end if;  
+                ex.csr.mcycle   <= ct.mcycle; 
+                ex.csr.minstret <= ct.minstret; 
 
                 -- Restore IE status on a mret 
-                if (exe.mret) then
-                    exe.csr.mstatus_mie     <= exe.csr.mstatus_mpie;
+                if (ex.mret) then
+                    ex.csr.mstatus_mie     <= ex.csr.mstatus_mpie;
+                end if;  
+
+                -- Set Previous IE status on a trap 
+                if (ex.any_trap) then
+                    ex.csr.mstatus_mpie    <= ex.csr.mstatus_mie;
                 end if;  
             
 
                 -- Set the trap cause register and exception program counter
-                -- register 
-                -- Priority defined in risc V spec 
+                -- registers
                 -- NOTE: SW is expected to increment the epc to the next instruction 
                 -- for an ecall/ebreak. If SW doesnt do this, then we'll get caught 
                 -- in an ecall / irq handler / mret ... loop 
-                -- I wanted to set the epc to pc+4 for ecall/ebreak, but doing so 
-                -- would violate the RISCV specification
-                if (exe.me_irq_pulse) then
-                    exe.csr.mcause_intr      <= '1'; 
-                    exe.csr.mcause_code      <= TRAP_MEI_IRQ; --11
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                elsif (exe.ms_irq_pulse) then 
-                    exe.csr.mcause_intr      <= '1'; 
-                    exe.csr.mcause_code      <= TRAP_MSI_IRQ; --3
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                elsif (exe.mt_irq_pulse) then
-                    exe.csr.mcause_intr      <= '1'; 
-                    exe.csr.mcause_code      <= TRAP_MTI_IRQ; --7
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                elsif (exe.instr_adr_ma_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_IMA; --0
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                elsif (exe.instr_access_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_IACC; --1
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                elsif (exe.ctrl.illegal) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_ILL_INTR; --2
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                elsif (exe.ebreak_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_EBREAK; --3
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
-                elsif (mem.load_adr_ma_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_LMA; --4
-                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                elsif (mem.load_access_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_LACC; --5
-                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                elsif (mem.store_adr_ma_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_SMA; --6
-                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                elsif (mem.store_access_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_SACC; --7
-                    exe.csr.mepc(31 downto 2) <= mem.pc(31 downto 2);
-                elsif (exe.ecall_excpt) then
-                    exe.csr.mcause_intr      <= '0'; 
-                    exe.csr.mcause_code      <= TRAP_MECALL; --11
-                    exe.csr.mepc(31 downto 2) <= exe.pc(31 downto 2);
+                -- NOTE: Notice that the memory stage epcs are forwarded
+                -- Priority defined in risc V spec 
+                if (ex.me_irq_pulse) then
+                    ex.csr.mcause_intr       <= '1'; 
+                    ex.csr.mcause_code       <= TRAP_MEI_IRQ; --11
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
+                elsif (ex.ms_irq_pulse) then 
+                    ex.csr.mcause_intr       <= '1'; 
+                    ex.csr.mcause_code       <= TRAP_MSI_IRQ; --3
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
+                elsif (ex.mt_irq_pulse) then
+                    ex.csr.mcause_intr      <= '1'; 
+                    ex.csr.mcause_code      <= TRAP_MTI_IRQ; --7
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
+                elsif (ex.instr_adr_ma_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_IMA; --0
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
+                elsif (ex.instr_access_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_IACC; --1
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
+                elsif (ex.ctrl.illegal) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_ILL_INTR; --2
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
+                elsif (ex.ebreak_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_EBREAK; --3
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
+                elsif (m1.load_adr_ma_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_LMA; --4
+                    ex.csr.mepc(31 downto 2) <= m1.pc(31 downto 2);
+                elsif (m2.load_access_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_LACC; --5
+                    ex.csr.mepc(31 downto 2) <= m2.pc(31 downto 2);
+                elsif (m1.store_adr_ma_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_SMA; --6
+                    ex.csr.mepc(31 downto 2) <= m1.pc(31 downto 2);
+                elsif (m2.store_access_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_SACC; --7
+                    ex.csr.mepc(31 downto 2) <= m2.pc(31 downto 2);
+                elsif (ex.ecall_excpt) then
+                    ex.csr.mcause_intr      <= '0'; 
+                    ex.csr.mcause_code      <= TRAP_MECALL; --11
+                    ex.csr.mepc(31 downto 2) <= ex.pc(31 downto 2);
                 end if; 
 
 
                 -- SW Writes
-                -- Block SW writes if there's an exception. This prevents the second 
-                -- instruction in the sequence shown below from writing to the CSR when 
-                -- it shouldnt. This is an issue because memory stage exceptions are 
-                -- determined one cycle after this stage
-                --      1.) instruction causing memory exception
-                --      2.) csr write instruction
-                -- This could also be an issue when an exception happens on a csr instruction
-                -- We dont want SW to update the csr state in this case. The trapped 
-                -- instruction doesnt get cleared till the wrb stage because the cpu 
-                -- needs to update the csr state in this stage. 
-                -- Another solution would be to move CSR writes to the writeback stage 
-                -- but this would imply additional forwarding. This solution seems cleaner. 
-                if (exe.csr_access and not exe.any_trap) then
-                    case exe.imm32(11 downto 0) is
+                if (wb.csr_access) then
+                    case (wb.csr_adr) is
                         --when CSR_FFLAGS  => TODO: 
                         --when CSR_FRM     =>
                         --when CSR_FCSR    =>
 
                         when CSR_MSTATUS =>
-                            exe.csr.mstatus_mie  <= exe.csr_wdata(MIE); 
-                            exe.csr.mstatus_mpie <= exe.csr_wdata(MPIE);
+                            ex.csr.mstatus_mie  <= wb.csr_wdata(MIE); 
+                            ex.csr.mstatus_mpie <= wb.csr_wdata(MPIE);
                         
                         when CSR_MIE =>
-                            exe.csr.mie_msi <= exe.csr_wdata(MSI); 
-                            exe.csr.mie_mti <= exe.csr_wdata(MTI); 
-                            exe.csr.mie_mei <= exe.csr_wdata(MEI); 
+                            ex.csr.mie_msi <= wb.csr_wdata(MSI); 
+                            ex.csr.mie_mti <= wb.csr_wdata(MTI); 
+                            ex.csr.mie_mei <= wb.csr_wdata(MEI); 
                     
                         when CSR_MEPC =>
-                            exe.csr.mepc(31 downto 2) <= exe.csr_wdata(31 downto 2);
+                            ex.csr.mepc(31 downto 2) <= wb.csr_wdata(31 downto 2);
+                        
+                        when CSR_MTVEC =>
+                            ex.csr.mtvec(31 downto 2) <= wb.csr_wdata(31 downto 2); 
                         
                         when CSR_MCYCLE =>
-                            exe.csr.mcycle   <= exe.csr_wdata; 
+                            ex.csr.mcycle   <= wb.csr_wdata; 
                             
                         when CSR_MINSTRET =>
-                            exe.csr.minstret <= exe.csr_wdata; 
+                            ex.csr.minstret <= wb.csr_wdata; 
 
                         when others =>
                             null;
@@ -1026,53 +1081,53 @@ begin
     ap_csr_rd : process(all)
     begin 
 
-        exe.csr_rdata <= (others=>'0'); -- default
+        ex.csr_rdata <= (others=>'0'); -- default
 
-        if (exe.csr_access) then
-            case exe.imm32(11 downto 0) is
+        if (ex.csr_access) then
+            case (ex.csr_adr) is
                 -- TODO: add these with FP extension
-                --when CSR_FFLAGS  => exe.csr_rdata <= exe.csr.fflags; 
-                --when CSR_FRM     => exe.csr_rdata <= exe.csr.frm   ;
-                --when CSR_FCSR    => exe.csr_rdata <= exe.csr.fcsr  ;
+                --when CSR_FFLAGS  => ex.csr_rdata <= ex.csr.fflags; 
+                --when CSR_FRM     => ex.csr_rdata <= ex.csr.frm   ;
+                --when CSR_FCSR    => ex.csr_rdata <= ex.csr.fcsr  ;
 
                 when CSR_TIME =>
-                    exe.csr_rdata  <= i_mtime;
+                    ex.csr_rdata  <= i_mtime;
             
                 when CSR_MHARTID =>
-                    exe.csr_rdata  <= G_HART_ID;
+                    ex.csr_rdata  <= G_HART_ID;
 
                 when CSR_MSTATUS =>
-                    exe.csr_rdata(MIE)  <= exe.csr.mstatus_mie ;
-                    exe.csr_rdata(MPIE) <= exe.csr.mstatus_mpie;
-                    --exe.csr_rdata(FS)   <= exe.csr.mstatus(FS)  ; TODO: add these with FP extension
-                    --exe.csr_rdata(SD)   <= exe.csr.mstatus(SD)  ; TODO: add these with FP extension
+                    ex.csr_rdata(MIE)  <= ex.csr.mstatus_mie ;
+                    ex.csr_rdata(MPIE) <= ex.csr.mstatus_mpie;
+                    --ex.csr_rdata(FS)   <= ex.csr.mstatus(FS)  ; TODO: add these with FP extension
+                    --ex.csr_rdata(SD)   <= ex.csr.mstatus(SD)  ; TODO: add these with FP extension
                 
                 when CSR_MTVEC =>
-                    exe.csr_rdata(MODE) <= b"00"; -- Direct mode - All exceptions set PC to BASE
-                    exe.csr_rdata(BASE) <= G_TRAP_ADDR(31 downto 2); 
+                    ex.csr_rdata(MODE) <= b"00"; -- Direct mode - All exceptions set PC to BASE
+                    ex.csr_rdata(BASE) <= ex.csr.mtvec(31 downto 2); 
 
                 when CSR_MIE =>
-                    exe.csr_rdata(MSI) <= exe.csr.mie_msi; 
-                    exe.csr_rdata(MTI) <= exe.csr.mie_mti; 
-                    exe.csr_rdata(MEI) <= exe.csr.mie_mei; 
+                    ex.csr_rdata(MSI) <= ex.csr.mie_msi; 
+                    ex.csr_rdata(MTI) <= ex.csr.mie_mti; 
+                    ex.csr_rdata(MEI) <= ex.csr.mie_mei; 
 
                 when CSR_MIP =>
-                    exe.csr_rdata(MSI) <= exe.csr.mip_msi; 
-                    exe.csr_rdata(MTI) <= exe.csr.mip_mti; 
-                    exe.csr_rdata(MEI) <= exe.csr.mip_mei; 
+                    ex.csr_rdata(MSI) <= ex.csr.mip_msi; 
+                    ex.csr_rdata(MTI) <= ex.csr.mip_mti; 
+                    ex.csr_rdata(MEI) <= ex.csr.mip_mei; 
 
                 when CSR_MCYCLE | CSR_CYCLE =>
-                    exe.csr_rdata <= exe.csr.mcycle; 
+                    ex.csr_rdata <= ex.csr.mcycle; 
 
                 when CSR_MINSTRET | CSR_INSTRET =>
-                    exe.csr_rdata <= exe.csr.minstret; 
+                    ex.csr_rdata <= ex.csr.minstret; 
 
                 when CSR_MEPC =>
-                    exe.csr_rdata(31 downto 2) <= exe.csr.mepc(31 downto 2);
+                    ex.csr_rdata(31 downto 2) <= ex.csr.mepc(31 downto 2);
 
                 when CSR_MCAUSE =>
-                    exe.csr_rdata(INTR) <= exe.csr.mcause_intr;
-                    exe.csr_rdata(CODE) <= exe.csr.mcause_code;
+                    ex.csr_rdata(INTR) <= ex.csr.mcause_intr;
+                    ex.csr_rdata(CODE) <= ex.csr.mcause_code;
 
                 when others =>
                     null;
@@ -1081,75 +1136,75 @@ begin
     end process; 
 
     -- Execute stage result mux
-    exe.exe_rslt <= exe.csr_rdata when exe.csr_access else exe.alu_rslt; 
+    ex.exe_rslt <= ex.ex_fw_csr_rdat when ex.csr_access else ex.alu_rslt; 
 
     
-    -- =========================================================================
-    -- Execute/Memory Registers ================================================
-    -- =========================================================================
-    sp_exe_mem_regs : process (i_clk)
+    sp_ex_m1_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst or haz.mem_flush) then
-                mem.instret_incr <= '0';
-                mem.ctrl.reg_wr  <= '0';
-                mem.ctrl.wrb_sel <= (others=>'-');
-                mem.ctrl.mem_wr  <= '0';
-                mem.ctrl.mem_rd  <= '0';
-                mem.pc           <= (others=>'-');
-                mem.rs2_adr      <= (others=>'-');
-                mem.rdst_adr     <= (others=>'-');
-                mem.rs2_dat      <= (others=>'-');
-                mem.funct3       <= (others=>'-');
-                mem.exe_rslt     <= (others=>'-');
-            elsif (haz.mem_enable) then
-                mem.instret_incr <= exe.instret_incr; 
-                mem.ctrl.reg_wr  <= exe.ctrl.reg_wr;
-                mem.ctrl.wrb_sel <= exe.ctrl.wrb_sel;
-                mem.ctrl.mem_wr  <= exe.ctrl.mem_wr;
-                mem.ctrl.mem_rd  <= exe.ctrl.mem_rd;
-                mem.pc           <= exe.pc; 
-                mem.rs2_adr      <= exe.rs2_adr;
-                mem.rdst_adr     <= exe.rdst_adr; 
-                mem.rs2_dat      <= exe.exe_fw_rs2_dat;
-                mem.funct3       <= exe.funct3; 
-                mem.exe_rslt     <= exe.exe_rslt;
+            if (i_rst or hz.m1_flush or not ex.valid) then
+                m1.pc           <= (others=>'-');
+                m1.valid        <= '0';
+                m1.ctrl.reg_wr  <= '0';
+                m1.ctrl.wrb_sel <= (others=>'-');
+                m1.ctrl.mem_wr  <= '0';
+                m1.ctrl.mem_rd  <= '0';
+                m1.rs2_adr      <= (others=>'-');
+                m1.rdst_adr     <= (others=>'-');
+                m1.rs2_dat      <= (others=>'-');
+                m1.funct3       <= (others=>'-');
+                m1.exe_rslt     <= (others=>'-');
+                m1.csr_access   <= '0';
+                m1.csr_adr      <= (others=>'-');
+                m1.csr_wdata    <= (others=>'-');
+            elsif (hz.m1_enable) then
+                m1.pc           <= ex.pc; 
+                m1.valid        <= ex.valid;
+                m1.ctrl.reg_wr  <= ex.ctrl.reg_wr;
+                m1.ctrl.wrb_sel <= ex.ctrl.wrb_sel;
+                m1.ctrl.mem_wr  <= ex.ctrl.mem_wr;
+                m1.ctrl.mem_rd  <= ex.ctrl.mem_rd;
+                m1.rs2_adr      <= ex.rs2_adr;
+                m1.rdst_adr     <= ex.rdst_adr; 
+                m1.rs2_dat      <= ex.exe_fw_rs2_dat;
+                m1.funct3       <= ex.funct3; 
+                m1.exe_rslt     <= ex.exe_rslt;
+                m1.csr_access   <= ex.csr_access;
+                m1.csr_adr      <= ex.csr_adr;
+                m1.csr_wdata    <= ex.csr_wdata; 
             end if; 
         end if;
     end process;
 
 
     -- =========================================================================
-    -- Memory Stage ============================================================
+    -- Memory 1 Stage ==========================================================
     -- =========================================================================
     
     -- Forwarding Mux 
     ap_mem_fw_sel : process (all) 
     begin 
-        case (haz.mem_fw_rs2_sel) is 
-            when WRB_FW => mem.mem_fw_rs2_dat <= wrb.rdst_dat;
-            when others => mem.mem_fw_rs2_dat <= mem.rs2_dat;
-        end case; 
+        if (wb.ctrl.reg_wr = '1' and wb.rdst_adr /= b"00000" and wb.rdst_adr = m1.rs2_adr) then
+            m1.m1_fw_rs2_dat <= wb.rdst_dat;
+        else 
+            m1.m1_fw_rs2_dat <= m1.rs2_dat;
+        end if; 
     end process; 
 
 
-    -- Memory Access -----------------------------------------------------------
+    -- Memory Request ----------------------------------------------------------
     -- -------------------------------------------------------------------------
-    o_dren  <= mem.ctrl.mem_rd and not i_dstall;  
-    o_dwen  <= mem.ctrl.mem_wr and not i_dstall;       
-    o_daddr <= mem.exe_rslt; 
-    o_dwdat <= mem.mem_fw_rs2_dat; 
+    o_dren  <= m1.ctrl.mem_rd;  
+    o_dwen  <= m1.ctrl.mem_wr;       
+    o_daddr <= m1.exe_rslt; 
+    o_dwdat <= m1.m1_fw_rs2_dat; 
     
-    mem.load_adr_ma_excpt  <= mem.ctrl.mem_rd and (o_daddr(1) or o_daddr(0));
-    mem.load_access_excpt  <= mem.ctrl.mem_rd and i_derror;
-    mem.store_adr_ma_excpt <= mem.ctrl.mem_wr and (o_daddr(1) or o_daddr(0));
-    mem.store_access_excpt <= mem.ctrl.mem_wr and i_derror;
+    m1.load_adr_ma_excpt  <= m1.ctrl.mem_rd and (o_daddr(1) or o_daddr(0));
+    m1.store_adr_ma_excpt <= m1.ctrl.mem_wr and (o_daddr(1) or o_daddr(0));
 
-
-    -- Stores
-    ap_data_store : process (all)
+    ap_store_ben : process (all)
     begin
-        case (mem.funct3) is
+        case (m1.funct3) is
             when F3_SB  => o_dben <= b"0001";
             when F3_SH  => o_dben <= b"0011";   
             when F3_SW  => o_dben <= b"1111"; 
@@ -1158,64 +1213,77 @@ begin
     end process;
 
 
-    -- Loads
-    -- This one may look a little weird... 
-    -- We can't determine this value till wrb stage becasue memory loads take 
-    -- at least one cycle
-    ap_data_load : process (all)
+    sp_m1_m2_regs : process (i_clk)
     begin
-        case (wrb.funct3) is 
-            when F3_LB  => 
-                wrb.memrd_dat(31 downto 8)  <= (others=>i_drdat(7));
-                wrb.memrd_dat(7 downto 0)   <= i_drdat(7 downto 0);
-
-            when F3_LH  =>
-                wrb.memrd_dat(31 downto 16) <= (others=>i_drdat(15));
-                wrb.memrd_dat(15 downto 0)  <= i_drdat(15 downto 0);
-
-            when F3_LW  => 
-                wrb.memrd_dat(31 downto 0)  <= i_drdat;
-
-            when F3_LBU =>
-                wrb.memrd_dat(31 downto 8)  <= (others=>'0');
-                wrb.memrd_dat(7 downto 0)   <= i_drdat(7 downto 0);
-
-            when F3_LHU => 
-                wrb.memrd_dat(31 downto 16) <= (others=>'0');
-                wrb.memrd_dat(15 downto 0)  <= i_drdat(15 downto 0);
-
-            when others => 
-                wrb.memrd_dat(31 downto 0)  <= (others=>'-');
-
-        end case; 
+        if rising_edge(i_clk) then
+            if (i_rst or hz.m2_flush or not m1.valid) then
+                m2.valid        <= '0'; 
+                m2.pc           <= (others=>'-');
+                m2.ctrl.reg_wr  <= '0'; 
+                m2.ctrl.wrb_sel <= (others=>'-');
+                m2.rdst_adr     <= (others=>'-');
+                m2.exe_rslt     <= (others=>'-');
+                m2.funct3       <= (others=>'-');
+                m2.csr_access   <= '0';
+                m2.csr_adr      <= (others=>'-');
+                m2.csr_wdata    <= (others=>'-'); 
+            elsif (hz.m2_enable) then
+                m2.valid        <= m1.valid; 
+                m2.pc           <= m1.pc;
+                m2.ctrl.reg_wr  <= m1.ctrl.reg_wr;
+                m2.ctrl.wrb_sel <= m1.ctrl.wrb_sel;
+                m2.rdst_adr     <= m1.rdst_adr;
+                m2.exe_rslt     <= m1.exe_rslt;
+                m2.funct3       <= m1.funct3;
+                m2.csr_access   <= m1.csr_access;
+                m2.csr_adr      <= m1.csr_adr;
+                m2.csr_wdata    <= m1.csr_wdata; 
+            end if; 
+        end if;
     end process;
 
 
     -- =========================================================================
-    -- Memory/Writeback Registers ==============================================
+    -- Memory 2 Stage ==========================================================
     -- =========================================================================
-    sp_mem_wrb_regs : process (i_clk)
+    -- Memory Response
+
+    m2.trap.load_access  <= m2.ctrl.mem_rd and i_derror;
+    m2.trap.store_access <= m2.ctrl.mem_wr and i_derror;
+    m2.drdat <= i_drdat; -- memory read needs to be directly registered for timing
+
+    sp_m2_wb_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst or haz.wrb_flush) then
-                wrb.instret_incr <= '0'; 
-                wrb.ctrl.reg_wr  <= '0'; 
-                wrb.ctrl.wrb_sel <= (others=>'-');
-                wrb.pc4          <= (others=>'-');
-                wrb.rdst_adr     <= (others=>'-');
-                wrb.exe_rslt     <= (others=>'-');
-                wrb.funct3       <= (others=>'-');
-            elsif (haz.wrb_enable) then
-                wrb.instret_incr <= mem.instret_incr; 
-                wrb.ctrl.reg_wr  <= mem.ctrl.reg_wr;
-                wrb.ctrl.wrb_sel <= mem.ctrl.wrb_sel;
-                wrb.pc4          <= std_logic_vector(unsigned(mem.pc) + 4);
-                wrb.rdst_adr     <= mem.rdst_adr;
-                wrb.exe_rslt     <= mem.exe_rslt;
-                wrb.funct3       <= mem.funct3;
+            if (i_rst or hz.wb_flush or not m2.valid) then
+                wb.valid        <= '0'; 
+                wb.pc4          <= (others=>'-');
+                wb.ctrl.reg_wr  <= '0'; 
+                wb.ctrl.wrb_sel <= (others=>'-');
+                wb.rdst_adr     <= (others=>'-');
+                wb.exe_rslt     <= (others=>'-');
+                wb.memrd_dat    <= (others=>'-');
+                wb.funct3       <= (others=>'-');
+                wb.csr_access   <= '0';
+                wb.csr_adr      <= (others=>'-');
+                wb.csr_wdata    <= (others=>'-'); 
+            elsif (hz.wb_enable) then
+                wb.valid        <= m2.valid; 
+                wb.pc4          <= std_logic_vector(unsigned(m2.pc) + 4);
+                wb.ctrl.reg_wr  <= m2.ctrl.reg_wr;
+                wb.ctrl.wrb_sel <= m2.ctrl.wrb_sel;
+                wb.rdst_adr     <= m2.rdst_adr;
+                wb.exe_rslt     <= m2.exe_rslt;
+                wb.memrd_dat    <= m2.memrd_dat;
+                wb.funct3       <= m2.funct3;
+                wb.csr_access   <= m2.csr_access;
+                wb.csr_wdata    <= m2.csr_wdata;
+                wb.csr_adr      <= m2.csr_adr;
+                wb.drdat        <= m2.drdat;
             else
-                wrb.instret_incr <= '0'; 
+                wb.valid        <= '0'; 
             end if; 
+        
         end if;
     end process;
 
@@ -1223,15 +1291,53 @@ begin
     -- =========================================================================
     -- Writeback Stage =========================================================
     -- =========================================================================
+
+    ap_data_load : process (all)
+    begin
+        case (wb.funct3) is 
+            when F3_LB  => 
+                wb.memrd_dat(31 downto 8)  <= (others=>wb.drdat(7));
+                wb.memrd_dat(7 downto 0)   <= wb.drdat(7 downto 0);
+
+            when F3_LH  =>
+                wb.memrd_dat(31 downto 16) <= (others=>wb.drdat(15));
+                wb.memrd_dat(15 downto 0)  <= wb.drdat(15 downto 0);
+
+            when F3_LW  => 
+                wb.memrd_dat(31 downto 0)  <= wb.drdat;
+
+            when F3_LBU =>
+                wb.memrd_dat(31 downto 8)  <= (others=>'0');
+                wb.memrd_dat(7 downto 0)   <= wb.drdat(7 downto 0);
+
+            when F3_LHU => 
+                wb.memrd_dat(31 downto 16) <= (others=>'0');
+                wb.memrd_dat(15 downto 0)  <= wb.drdat(15 downto 0);
+
+            when others => 
+                wb.memrd_dat(31 downto 0)  <= (others=>'-');
+        end case; 
+    end process;
+
     ap_wrb_sel : process (all) 
     begin
-        case (wrb.ctrl.wrb_sel) is 
-            when WRB_SEL_EXE => wrb.rdst_dat <= wrb.exe_rslt;
-            when WRB_SEL_MEM => wrb.rdst_dat <= wrb.memrd_dat;
-            when WRB_SEL_PC4 => wrb.rdst_dat <= wrb.pc4; 
-            when others      => wrb.rdst_dat <= (others=>'-');
+        case (wb.ctrl.wrb_sel) is 
+            when WRB_SEL_EXE => wb.rdst_dat <= wb.exe_rslt;
+            when WRB_SEL_MEM => wb.rdst_dat <= wb.memrd_dat;
+            when WRB_SEL_PC4 => wb.rdst_dat <= wb.pc4; 
+            when others      => wb.rdst_dat <= (others=>'-');
         end case; 
     end process; 
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1239,216 +1345,212 @@ begin
     -- =========================================================================
     -- Hazard Unit =============================================================
     -- =========================================================================
-    -- Detects and resolves pipeline hazards by forwarding where possible and 
-    -- stalling otherwise
-    
-    -- Forwarding --------------------------------------------------------------
+    -- Detects and resolves pipeline hazards 
+
+
+    -- TODO: This section is a giant glob of logic. See if I can do anything 
+    -- to make it smaller.
+
+    -- Decode stage data hazards  ---------------------------------------
     -- -------------------------------------------------------------------------
-    -- TODO: think about forwarding due to not having a write thru register file 
-    -- I actually think I may have solved this by forwarding from wrb to decode???
-    -- Needs to be thought about deeply.. Pretty sure its good, but dbl check my thinking in the morning
+    -- These are only a problem because we calculate branches in the decode stage
+    -- If I move branches up to execute for possible timing improvements then 
+    -- I can also remove this hazard section.
 
-    -- Stages closest to target stage take priority because they have the most recent value 
-    -- All of these are "data hazards"
-    ap_forwarding : process (all)
-    begin
-        -- Forwarding to decode stage
-        -- should only need to forward to decode stage if it is a branch or jalr instruction 
-        -- TODO: add logic to check for branch in decode stage (I think )
-        -- Can I forward regardless of it being a branch? I beleive I can. This shouldnt hurt 
-        -- anything 
-        -- RS1
-        if    (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs1_adr) then
-            haz.dec_fw_rs1_sel <= MEM_FW;
-        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = dec.rs1_adr) then
-            haz.dec_fw_rs1_sel <= WRB_FW;
-        else 
-            haz.dec_fw_rs1_sel <= NO_FW;
-        end if; 
-        -- RS2
-        if    (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = dec.rs2_adr) then
-            haz.dec_fw_rs2_sel <= MEM_FW;
-        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = dec.rs2_adr) then
-            haz.dec_fw_rs2_sel <= WRB_FW;
-        else 
-            haz.dec_fw_rs2_sel <= NO_FW;
-        end if; 
+    hz.id_ex_br_hazard <= '1' when id.ctrl.branch = '1' 
+                      and ex.ctrl.reg_wr = '1' 
+                      and ex.rdst_adr /= b"00000" 
+                      and (ex.rdst_adr = id.rs1_adr 
+                       or ex.rdst_adr = id.rs2_adr) 
+                    else '0';
 
-        -- TODO: can I get rid of some of this???
-        -- -- Forwarding to execute stage
-        -- -- RS1
-        if    (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = exe.rs1_adr) then
-            haz.exe_fw_rs1_sel <= MEM_FW;
-        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = exe.rs1_adr) then
-            haz.exe_fw_rs1_sel <= WRB_FW;
-        else 
-            haz.exe_fw_rs1_sel <= NO_FW;
-        end if; 
-        -- RS2
-        if    (mem.ctrl.reg_wr = '1' and mem.rdst_adr /= b"00000" and mem.rdst_adr = exe.rs2_adr) then
-            haz.exe_fw_rs2_sel <= MEM_FW;
-        elsif (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = exe.rs2_adr) then
-            haz.exe_fw_rs2_sel <= WRB_FW;
-        else 
-            haz.exe_fw_rs2_sel <= NO_FW;
-        end if; 
+    hz.id_ex_jalr_hazard <= '1' when id.ctrl.jalr = '1' 
+                        and ex.ctrl.reg_wr = '1' 
+                        and ex.rdst_adr /= b"00000" 
+                        and (ex.rdst_adr = id.rs1_adr) 
+                    else '0';  
 
-        -- Forwarding to memory stage
-        -- RS2 - Needed for memory access
-        if    (wrb.ctrl.reg_wr = '1' and wrb.rdst_adr /= b"00000" and wrb.rdst_adr = mem.rs2_adr) then
-            haz.mem_fw_rs2_sel <= WRB_FW;
-        else 
-            haz.mem_fw_rs2_sel <= NO_FW;
-        end if; 
+    hz.id_m1_br_hazard <= '1' when id.ctrl.branch = '1' 
+                             and m1.ctrl.mem_rd = '1' 
+                             and m1.rdst_adr /= b"00000" 
+                             and (m1.rdst_adr = id.rs1_adr 
+                              or m1.rdst_adr = id.rs2_adr) 
+                    else '0'; 
 
-    end process;
+    hz.id_m1_jalr_hazard <= '1' when id.ctrl.jalr = '1' 
+                               and m1.ctrl.mem_rd = '1' 
+                               and m1.rdst_adr /= b"00000" 
+                               and m1.rdst_adr = id.rs1_adr 
+                    else '0'; 
+
+    hz.id_m2_br_hazard <= '1' when id.ctrl.branch = '1' 
+                        and m2.ctrl.mem_rd = '1' 
+                        and m2.rdst_adr /= b"00000" 
+                        and (m2.rdst_adr = id.rs1_adr 
+                         or m2.rdst_adr = id.rs2_adr) 
+               else '0'; 
+
+    hz.id_m2_jalr_hazard <= '1' when id.ctrl.jalr = '1' 
+                          and m2.ctrl.mem_rd = '1' 
+                          and m2.rdst_adr /= b"00000" 
+                          and m2.rdst_adr = id.rs1_adr 
+               else '0'; 
+
+
+    -- Execute stage data hazards  ---------------------------------------
+    -- -------------------------------------------------------------------------
+    -- Stall on rs1 for csr and alu operations
+    hz.ex_m1_csr_hazard <= '1' when  
+            ex.ctrl.reg_wr = '1'
+            and  m1.ctrl.mem_rd = '1' 
+            and  m1.rdst_adr /= b"00000"
+            and (m1.rdst_adr = ex.rs1_adr) 
+        else '0'; 
+
+    -- CSR operations only read rs1, so only stall rs2 if this is an alu operation
+    -- and NOT a CSR operation. TODO: TODO: can add a signal stating if this is a r-type csr or an immediate csr. 
+    -- I dont have to stall if its an immediate CSR, so that is another thing we can check for to prevent 
+    -- an unnecessary stall. 
+    hz.ex_m1_alu_hazard <= '1' when  ex.ctrl.reg_wr = '1' and not ex.csr_access 
+                        and  m1.ctrl.mem_rd = '1' 
+                        and  m1.rdst_adr /= b"00000"
+                        and (m1.rdst_adr = ex.rs2_adr) 
+                        else '0'; 
+
+    hz.ex_m2_csr_hazard <= '1' when  ex.ctrl.reg_wr = '1'
+                            and  m2.ctrl.mem_rd = '1' 
+                            and  m2.rdst_adr /= b"00000"
+                            and (m2.rdst_adr = ex.rs1_adr) 
+                            else '0'; 
+      
+    hz.ex_m2_alu_hazard <= '1' when  ex.ctrl.reg_wr = '1' and not ex.csr_access 
+                              and  m2.ctrl.mem_rd = '1' 
+                              and  m2.rdst_adr /= b"00000"
+                              and (m2.rdst_adr = ex.rs2_adr) 
+                              else '0'; 
+
+
+    -- Stall if store is in execute and load is in m1
+    hz.ex_m1_ls_hazard <= '1' when ex.ctrl.mem_wr = '1' 
+                            and  m1.ctrl.mem_rd = '1' 
+                            and  m1.rdst_adr /= b"00000"
+                            and (m1.rdst_adr = ex.rs2_adr) 
+                            else '0'; 
 
 
 
     -- Stalling & Flushing -----------------------------------------------------
-    -- -------------------------------------------------------------------------
-
-    -- Data Hazards ------------------------------------------------------------
-    -- Load Hazard - if load is in exe while dependent instruction is in dec, 
-    -- stall the pipe.
-    -- This is a "data hazard" that is not solvable by pure forwarding
-    -- Dont need to check mem.ctrl.reg_wr because we know that is already 1 if mem.ctrl.mem_rd is 1
-    haz.ld_hazard <= '1' when  exe.ctrl.mem_rd = '1' 
-                      and  exe.rdst_adr /= b"00000"
-                      and (exe.rdst_adr = dec.rs1_adr or exe.rdst_adr = dec.rs2_adr) 
-                    else '0'; 
-
-
-    -- Data Hazards (due to branches being calculated in the dec phase)
-    -- if branch is in ID while ld is in EX or MEM wait till ld gets to WB
-    haz.br_ld_hazard <= '1' when dec.ctrl.branch = '1' 
-                             and mem.ctrl.mem_rd = '1' 
-                             and mem.rdst_adr /= b"00000" 
-                             and (mem.rdst_adr = dec.rs1_adr 
-                              or mem.rdst_adr = dec.rs2_adr) 
-                    else '0'; 
-
-    haz.jalr_ld_hazard <= '1' when dec.ctrl.jalr = '1' 
-                               and mem.ctrl.mem_rd = '1' 
-                               and mem.rdst_adr /= b"00000" 
-                               and mem.rdst_adr = dec.rs1_adr 
-                    else '0'; 
-
-    -- if branch is in ID while add,etc is in EX, wait till add,etc is in MEM
-    haz.br_hazard <= '1' when dec.ctrl.branch = '1' 
-                      and exe.ctrl.reg_wr = '1' 
-                      and exe.rdst_adr /= b"00000" 
-                      and (exe.rdst_adr = dec.rs1_adr 
-                       or exe.rdst_adr = dec.rs2_adr) 
-                    else '0';
-
-    haz.jalr_hazard <= '1' when dec.ctrl.jalr = '1' 
-                        and exe.ctrl.reg_wr = '1' 
-                        and exe.rdst_adr /= b"00000" 
-                        and (exe.rdst_adr = dec.rs1_adr) 
-                    else '0';  
-
-    -- If an mret instr follows an epc csr write, then we need to stall until the 
-    -- epc is updated with the latest value (since mret causes an epc read)
-    -- if rs1_adr /= b"00000" then we dont need to stall because the csr value is not 
-    -- being modified
-    haz.mret_hazard <= '1' when dec.mret = '1' 
-                            and exe.csr_access = '1' 
-                            and exe.rs1_adr /= b"00000"
-                            and exe.imm32(11 downto 0) = CSR_MEPC
-                        else '0'; 
-                        
-
-
-    ap_flush_stall : process (all)
+    -- -------------------------------------------------------------------------   
+    ap_pipeline_ctrl : process (all)
     begin
         -- Defaults 
-        haz.pc_enable  <= '1'; 
-        haz.dec_enable <= '1';
-        haz.exe_enable <= '1';
-        haz.mem_enable <= '1';
-        haz.wrb_enable <= '1';
-        haz.dec_flush  <= '0';
-        haz.exe_flush  <= '0'; 
-        haz.mem_flush  <= '0';
-        haz.wrb_flush  <= '0';
+        hz.f1_enable <= '1'; 
+        hz.f2_enable <= '1'; 
+        hz.id_enable <= '1';
+        hz.ex_enable <= '1';
+        hz.m1_enable <= '1';
+        hz.m2_enable <= '1';
+        hz.wb_enable <= '1';
+        hz.f1_flush  <= '0'; 
+        hz.f2_flush  <= '0'; 
+        hz.id_flush  <= '0';
+        hz.ex_flush  <= '0';
+        hz.m1_flush  <= '0';
+        hz.m2_flush  <= '0';
+        hz.wb_flush  <= '0';
+
 
 
         -- Turn a wfi instruction into a nop 
         -- TODO: Implementing wfi is low priority. Dont worry about this till
         -- everything else works. 
-        if (dec.wfi) then 
-            haz.exe_flush <= '1'; 
+        if (ex.wfi) then 
+            hz.m1_flush <= '1'; 
         end if; 
         
-        -- Control Hazards -----------------------------------------------------
-        -- kill the instruction that caused the trap after it has written its trap information during the exe stage
-        -- This way, any illegal value that comes from an illegal instruction does not get writen back to the register file.
-        -- We also don't want exception / interrupted instructions to increment the instruction 
-        -- performance counter. 
-        if (exe.any_trap) then 
-            haz.mem_flush <= '1'; 
-        end if; 
 
-        -- Memory stage exceptions 
-        -- Unlike decode stage exceptions, we go ahead and kill the bad memory exception
-        -- here because it gets forwarded to the exe stage this cycle 
-        -- For the decode stage excpetions, we wait until the instruction exits the exe 
-        -- phase to kill it. 
-        if (mem.load_adr_ma_excpt or mem.load_access_excpt or
-                mem.store_adr_ma_excpt or mem.store_access_excpt) then
-            haz.dec_flush <= '1';
-            haz.exe_flush <= '1'; 
-            haz.mem_flush <= '1';
-            haz.exe_flush <= '1';
+
+        -- Control Hazard Flushes ----------------------------------------------
+        -- Memory 2 stage exceptions 
+        if (m2.load_access_excpt or m2.store_access_excpt) then
+            hz.f2_flush  <= '1'; 
+            hz.id_flush  <= '1';
+            hz.ex_flush  <= '1';
+            hz.m1_flush  <= '1';
+            hz.m2_flush  <= '1';
+            hz.wb_flush  <= '1';
         end if;
 
-        -- Decode stage exceptions, mret, and branch taken
-        -- In these cases we want to flush the instruction that was speculatively 
-        -- fetched after the exception instruction. The exception instruction will 
-        -- also eventually get flushed, but not until after the exe stage where 
-        -- the mcause csr is updated. The trap handler base address will be the next
-        -- address fetched. So instruction order goes 
-        -- 1. exception causing instruction 
-        -- 2. speculatively fethed instruction (flushed)
-        -- 3. trap handler base address instruction 
-        if (dec.illeg_instr_excpt or dec.ecall_excpt or dec.ebreak_excpt or 
-                (dec.mret and not haz.mret_hazard) or dec.fence or dec.fencei --TODO: not sure about fence and fenci here...
-                or dec.br_taken) then
-            haz.dec_flush <= '1';
+        -- Memory 1 stage exceptions 
+        if (m1.load_adr_ma_excpt or m1.store_adr_ma_excpt) then
+            hz.f2_flush  <= '1'; 
+            hz.id_flush  <= '1';
+            hz.ex_flush  <= '1';
+            hz.m1_flush  <= '1';
+            hz.m2_flush  <= '1';
+        end if;
+
+        -- Execute stage exceptions & mret
+        -- TODO: Doublecheck the RISC-V Spec about weather or not mret, ecall, 
+        -- and ebreak should add to the instret counter. I may need a new section
+        -- that doesnt kill that instruction
+        if (ex.trap.illeg_instr or ex.trap.ecall or ex.trap.ebreak or 
+                ex.trap.instr_adr_ma or ex.trap.instr_access or ex.mret) then
+            hz.f2_flush  <= '1'; 
+            hz.id_flush  <= '1';
+            hz.ex_flush  <= '1';
+            hz.m1_flush  <= '1';
         end if; 
 
+        -- Decode stage branches
+        if (id.br_taken) then
+            hz.f2_flush  <= '1'; 
+            hz.id_flush  <= '1';
+        end if;
 
-        -- Wait on Memory ------------------------------------------------------
+
+
+        -- Wait on Memory Accesses ---------------------------------------------
         if (i_dstall) then -- pause the pipe while waiting on dmem
-            haz.pc_enable  <= '0'; 
-            haz.dec_enable <= '0';
-            haz.exe_enable <= '0'; 
-            haz.mem_enable <= '0';
-            haz.wrb_enable <= '0';
+            hz.f1_enable <= '0'; 
+            hz.f2_enable <= '0'; 
+            hz.id_enable <= '0';
+            hz.ex_enable <= '0';
+            hz.m1_enable <= '0';
+            hz.m2_enable <= '0';
+            hz.wb_flush  <= '1';
         end if; 
 
         if (i_istall) then -- pause the pipeline while waiting on the imem
-            haz.pc_enable  <= '0'; 
-            haz.dec_flush  <= '1'; 
-            haz.exe_flush  <= '1'; 
+            hz.f1_enable <= '0'; 
+            hz.f2_enable <= '0'; 
+            hz.id_flush  <= '1';
         end if;
 
 
         -- Data Hazards --------------------------------------------------------
-        if (haz.ld_hazard or haz.br_hazard or haz.jalr_hazard or haz.mret_hazard) then -- stall at dec, bubble at exe
-            haz.pc_enable  <= '0'; 
-            haz.dec_enable <= '0';
-            haz.exe_flush  <= '1'; 
+        -- Decode Stage Stalls
+        if (hz.id_ex_br_hazard or hz.id_ex_jalr_hazard or hz.id_m1_br_hazard or
+                hz.id_m1_jalr_hazard or id_m2_br_hazard or id_m2_jalr_hazard) then 
+            hz.f1_enable <= '0'; 
+            hz.f2_enable <= '0'; 
+            hz.id_enable <= '0';
+            hz.ex_flush  <= '1'; 
         end if; 
         
-        if (haz.br_ld_hazard or haz.jalr_ld_hazard) then -- stall at dec, bubble at mem
-            haz.pc_enable  <= '0'; 
-            haz.dec_enable <= '0';
-            haz.mem_flush  <= '1';
+        -- Execute Stage Stalls
+        if (hz.ex_m1_csr_hazard or hz.ex_m1_alu_hazard or hz.ex_m2_csr_hazard or 
+                hz.ex_m2_alu_hazard or hz.ex_m1_ls_hazard) then 
+            hz.f1_enable <= '0'; 
+            hz.f2_enable <= '0'; 
+            hz.id_enable <= '0';
+            hz.ex_enable <= '0';
+            hz.m1_flush  <= '1'; 
         end if; 
         
     end process;
+
+
 
 
 
@@ -1460,7 +1562,7 @@ begin
     process (i_clk)
     begin
         if rising_edge(i_clk) then
-            cnt.mcycle <= std_logic_vector(unsigned(exe.csr.mcycle) + 1);
+            ct.mcycle <= std_logic_vector(unsigned(ex.csr.mcycle) + 1);
         end if;
     end process;
     
@@ -1469,8 +1571,8 @@ begin
     process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (wrb.instret_incr) then
-                cnt.minstret <= std_logic_vector(unsigned(exe.csr.minstret) + 1);
+            if (wb.instret_incr) then
+                ct.minstret <= std_logic_vector(unsigned(ex.csr.minstret) + 1);
             end if; 
         end if;
     end process;

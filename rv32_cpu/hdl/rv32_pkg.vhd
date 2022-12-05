@@ -538,9 +538,10 @@ package rv32_pkg is
     constant RTYPE : std_logic_vector(2 downto 0) := "101";
     --
     -- Forwarding mux select signals 
-    constant NO_FW   : std_logic_vector(1 downto 0) := "00";
-    constant MEM_FW  : std_logic_vector(1 downto 0) := "01";
-    constant WRB_FW  : std_logic_vector(1 downto 0) := "10";
+    constant NO_FW  : std_logic_vector(1 downto 0) := "00";
+    constant M1_FW  : std_logic_vector(1 downto 0) := "01";
+    constant M2_FW  : std_logic_vector(1 downto 0) := "01";
+    constant WB_FW  : std_logic_vector(1 downto 0) := "11";
 
     constant NOP_INSTR : std_logic_vector(31 downto 0) := 
             x"000" & b"00000" & b"00000" & F3_SUBADD & OPCODE_ALUI;
