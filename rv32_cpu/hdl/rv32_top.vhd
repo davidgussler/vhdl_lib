@@ -4,7 +4,7 @@
 -- # Copyright 2022, David Gusser
 -- # ===========================================================================
 -- # File     : rv32_top.vhd
--- # Author   : David Gussler - davidnguss@gmail.com 
+-- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
 -- # Connects the CPU(s) to the cache & memory system. Exposes the external

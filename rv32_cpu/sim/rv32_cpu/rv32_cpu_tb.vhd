@@ -19,14 +19,14 @@ architecture tb of rv32_cpu_tb is
 
     -- Simulation Signals / Constants ------------------------------------------
     -- -------------------------------------------------------------------------
-    constant C_CLK_PERIOD : time := 10 ns; 
-    constant C_CLK2Q      : time := 1 ns;
+    constant CLK_PERIOD : time := 10 ns; 
+    constant CLK_TO_Q   : time := 1 ns;
+
+    constant MEM_LATENCY : positive := 2; 
 
     signal clk            : std_logic := '0';
     signal rst            : std_logic := '1';
     signal rstn           : std_logic := '0';
-
-    shared variable sv_mem_latency : positive := 3; 
 
 
     -- DUT Signals / Constants -------------------------------------------------
@@ -41,7 +41,6 @@ architecture tb of rv32_cpu_tb is
         iaddr    : std_logic_vector(31 downto 0);
         fencei   : std_logic; 
         irdat    : std_logic_vector(31 downto 0);
-        istall   : std_logic; 
         iack     : std_logic; 
         ierr     : std_logic; 
         dren     : std_logic; 
@@ -51,7 +50,6 @@ architecture tb of rv32_cpu_tb is
         fence    : std_logic; 
         dwdat    : std_logic_vector(31 downto 0);
         drdat    : std_logic_vector(31 downto 0);
-        dstall   : std_logic; 
         dack     : std_logic; 
         derr     : std_logic; 
         ms_irq   : std_logic; 
@@ -78,6 +76,23 @@ architecture tb of rv32_cpu_tb is
     signal neorv  : cpu_t;
     signal golden : golden_t; 
 
+
+    -- Used for memory latency
+    signal iadr  : slv_array_t(0 to MEM_LATENCY-1)(31 downto 0);
+    signal irack : std_logic_vector(0 to MEM_LATENCY-1); 
+    signal dadr  : slv_array_t(0 to MEM_LATENCY-1)(31 downto 0); 
+    signal drack : std_logic_vector(0 to MEM_LATENCY-1);
+    signal dwack : std_logic_vector(0 to MEM_LATENCY-1);
+    signal dwdat : slv_array_t(0 to MEM_LATENCY-1)(31 downto 0);
+    signal dwben : slv_array_t(0 to MEM_LATENCY-1)(3 downto 0);
+
+    signal iadr_dly  , iadr_sig  : std_logic_vector(31 downto 0);
+    signal irack_dly , irack_sig : std_logic; 
+    signal dadr_dly  , dadr_sig  : std_logic_vector(31 downto 0);
+    signal drack_dly , drack_sig : std_logic; 
+    signal dwack_dly , dwack_sig : std_logic; 
+    signal dwdat_dly , dwdat_sig : std_logic_vector(31 downto 0);
+    signal dwben_dly , dwben_sig : std_logic_vector(3 downto 0);
 
 
     -- CPU Memories 
@@ -138,68 +153,68 @@ architecture tb of rv32_cpu_tb is
 
 
     constant RTYPE_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
-        rv_addi(1, 0, 4), 
-        rv_addi(2, 0, -13), 
-        rv_sub(3, 1, 2),
-        rv_sll(1, 3, 2),
-        rv_slt(1, 3, 2),
-        rv_sltu(4, 1, 3),
-        rv_xor(5, 1, 2),
-        rv_srl(2, 3, 2),
-        rv_sra(2, 3, 2),
-        rv_or(6,5,1),
-        rv_and(7,6,4),
+        rv_addi(1, 0, 4),   -- 0
+        rv_addi(2, 0, -13), -- 4
+        rv_sub(3, 1, 2),    -- 8
+        rv_sll(1, 3, 2),    -- C
+        rv_slt(1, 3, 2),-- 10
+        rv_sltu(4, 1, 3),-- 14
+        rv_xor(5, 1, 2),-- 18
+        rv_srl(2, 3, 2),-- 1C
+        rv_sra(2, 3, 2),-- 20
+        rv_or(6,5,1),-- 24
+        rv_and(7,6,4),-- 28
 
-        rv_sw (0, 1,  1024),
-        rv_sw (0, 2,  1024+1*4), 
-        rv_sw (0, 3,  1024+2*4), 
-        rv_sw (0, 4,  1024+3*4), 
-        rv_sw (0, 5,  1024+4*4), 
-        rv_sw (0, 6,  1024+5*4), 
-        rv_sw (0, 7,  1024+6*4), 
+        rv_sw (0, 1,  1024),-- 2c
+        rv_sw (0, 2,  1024+1*4), -- 30
+        rv_sw (0, 3,  1024+2*4), -- 34
+        rv_sw (0, 4,  1024+3*4), -- 38
+        rv_sw (0, 5,  1024+4*4), -- 3c
+        rv_sw (0, 6,  1024+5*4), -- 40
+        rv_sw (0, 7,  1024+6*4), -- 44
         
-        rv_jal (0, 0),
+        rv_jal (0, 0),--48
     
         others => (others=>'0')
     );
 
 
     constant BRANCH_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
-        rv_addi(1, 0, 14), 
-        rv_addi(2, 0, 25), 
-        rv_addi(3, 0, -36), 
+        rv_addi(1, 0, 14),  -- 0
+        rv_addi(2, 0, 25), -- 4
+        rv_addi(3, 0, -36), -- 8
 
-        rv_beq(2, 2, 8),
-        rv_addi(4, 0, 1), 
-        rv_beq(2, 3, 8), 
-        rv_addi(5, 0, 1), 
+        rv_beq(2, 2, 8/2), -- c   branch to 14
+        rv_addi(4, 0, 1), -- 10  skipped
+        rv_beq(2, 3, 8/2), -- 14 no branch, 18 is next instruction
+        rv_addi(5, 0, 1),  -- 18
 
-        rv_bne(2, 3, 8),
-        rv_addi(6, 0, 1),
-        rv_bne(1, 1, 8), 
-        rv_addi(7, 0, 1),
+        rv_bne(2, 3, 8/2), --1c    branch to 24
+        rv_addi(6, 0, 1), -- 20 -- skipped
+        rv_bne(1, 1, 8/2), -- 24  -- no branch, 28 is next
+        rv_addi(7, 0, 1), --28
 
-        rv_blt(3, 2, 8),
-        rv_addi(8, 0, 1), 
-        rv_blt(2, 3, 8), 
-        rv_addi(9, 0, 1), 
+        rv_blt(3, 2, 8/2), --2c
+        rv_addi(8, 0, 1),  -- 30
+        rv_blt(2, 3, 8/2), --34
+        rv_addi(9, 0, 1), --38
 
-        rv_bge(2, 1, 8),
-        rv_addi(10, 0, 1), 
-        rv_bge(1, 2, 8), 
-        rv_addi(11, 0, 1), 
+        rv_bge(2, 1, 8/2), --3c
+        rv_addi(10, 0, 1), --40
+        rv_bge(1, 2, 8/2), --44
+        rv_addi(11, 0, 1), -- 48
 
-        rv_bltu(3, 2, 8),
-        rv_addi(12, 0, 1), 
-        rv_bltu(2, 3, 8), 
-        rv_addi(13, 0, 1), 
+        rv_bltu(3, 2, 8/2), --4c
+        rv_addi(12, 0, 1), --50 
+        rv_bltu(2, 3, 8/2), --54 -- branch to 5c
+        rv_addi(13, 0, 1), --58
 
-        rv_bgeu(2, 1, 8),
-        rv_addi(14, 0, 1), 
-        rv_bgeu(1, 2, 8), 
-        rv_addi(15, 0, 1), 
+        rv_bgeu(2, 1, 8/2), --5c
+        rv_addi(14, 0, 1), -- 60
+        rv_bgeu(1, 2, 8/2), --64
+        rv_addi(15, 0, 1), --68
 
-        rv_sw (0, 1,  1024),
+        rv_sw (0, 1,  1024), --6c (400)
         rv_sw (0, 2,  1024+1*4), 
         rv_sw (0, 3,  1024+2*4), 
         rv_sw (0, 4,  1024+3*4), 
@@ -457,14 +472,15 @@ begin
             if run("i-type") then
                 info("Loading i-type test program into memories...");
                 mem_init(memory_dut, ITYPE_TEST); 
+                --mem_print(memory_dut);
                 mem_init(memory_golden, ITYPE_TEST); 
 
                 info("Resetting DUT and model...");
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -482,8 +498,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -501,8 +517,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -520,8 +536,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -539,8 +555,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -558,8 +574,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -577,8 +593,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -596,8 +612,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -614,8 +630,8 @@ begin
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
-                rst <= '1', '0' after 16 * C_CLK_PERIOD;
-                wait for 500 * C_CLK_PERIOD;
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 500 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
@@ -633,7 +649,7 @@ begin
 
     -- TB Signals --------------------------------------------------------------
     -- -------------------------------------------------------------------------
-    clk  <= not clk after C_CLK_PERIOD / 2;
+    clk  <= not clk after CLK_PERIOD / 2;
     rstn <= not rst;
 
 
@@ -646,8 +662,7 @@ begin
     u_dut_cpu : entity work.rv32_cpu
     generic map (
         G_HART_ID    => HART_ID,
-        G_RESET_ADDR => RESET_ADDR,
-        G_TRAP_ADDR  => TRAP_ADDR
+        G_RESET_ADDR => RESET_ADDR
     )
     port map (
         -- Clock & Reset
@@ -655,23 +670,24 @@ begin
         i_rst       => rst,
         
         -- Instruction  Interface 
-        o_iren      => dut.iren  ,
-        o_iaddr     => dut.iaddr ,
-        o_fencei    => dut.fencei,
-        i_irdat     => dut.irdat ,
-        i_istall    => dut.istall,
-        i_ierror    => dut.ierr,
+        o_iren   => dut.iren  ,
+        o_iaddr  => dut.iaddr ,
+        o_fencei => dut.fencei,
+        i_irdat  => dut.irdat ,
+        i_iack   => dut.iack,
+        i_ierror => dut.ierr,
 
         -- Data Interface 
-        o_dren      => dut.dren  ,
-        o_dwen      => dut.dwen  ,
-        o_dben      => dut.dben  ,
-        o_daddr     => dut.daddr ,
-        o_fence     => dut.fence,
-        o_dwdat     => dut.dwdat ,
-        i_drdat     => dut.drdat ,
-        i_dstall    => dut.dstall,
-        i_derror    => dut.derr,
+
+        o_dren   => dut.dren  ,
+        o_dwen   => dut.dwen  ,
+        o_dben   => dut.dben  ,
+        o_daddr  => dut.daddr ,
+        o_dwdat  => dut.dwdat ,
+        o_fence  => dut.fence ,
+        i_drdat  => dut.drdat ,
+        i_dack   => dut.dack,
+        i_derror => dut.derr,   
 
         -- Interrupts
         i_ms_irq    => dut.ms_irq,
@@ -688,60 +704,155 @@ begin
 
     -- DUT Memory --------------------------------------------------------------
     -- -------------------------------------------------------------------------
+    
+    sp_reg_mem : process (all)
+    begin
+        irack_sig <= '0';
+        drack_sig <= '0'; 
+        dwack_sig <= '0'; 
+
+        iadr_sig  <= (others=>'X');
+        dadr_sig  <= (others=>'X');
+        dwdat_sig <= (others=>'X');
+        dwben_sig <= (others=>'X');
+
+        if (dut.iren) then 
+            iadr_sig  <= dut.iaddr; 
+            irack_sig <= not rst; 
+        end if;
+
+        if (dut.dren) then 
+            dadr_sig  <= dut.daddr; 
+            drack_sig <= not rst; 
+        end if;
+
+        if (dut.dwen) then 
+            dadr_sig  <= dut.daddr; 
+            dwdat_sig <= dut.dwdat; 
+            dwben_sig <= dut.dben; 
+            dwack_sig <= not rst; 
+        end if;
+    end process;
+
+    ig_latency1 : if MEM_LATENCY = 1 generate
+        iadr_dly  <= iadr_sig;
+        irack_dly <= irack_sig;
+        dadr_dly  <= dadr_sig;
+        drack_dly <= drack_sig;
+        dwack_dly <= dwack_sig;
+        dwdat_dly <= dwdat_sig;
+        dwben_dly <= dwben_sig;
+    end generate; 
+
+    ig_latency2 : if MEM_LATENCY = 2 generate
+        process (clk)
+        begin
+            if rising_edge(clk) then
+                iadr_dly  <= iadr_sig;
+                irack_dly <= irack_sig;
+                dadr_dly  <= dadr_sig;
+                drack_dly <= drack_sig;
+                dwack_dly <= dwack_sig;
+                dwdat_dly <= dwdat_sig;
+                dwben_dly <= dwben_sig;
+            end if;
+        end process;
+    end generate; 
+
+    ig_latency3 : if MEM_LATENCY > 2 generate
+        process (clk)
+        begin
+            if rising_edge(clk) then
+
+                iadr(0)  <= iadr_sig;
+                irack(0) <= irack_sig;
+                dadr(0)  <= dadr_sig;
+                drack(0) <= drack_sig;
+                dwack(0) <= dwack_sig;
+                dwdat(0) <= dwdat_sig;
+                dwben(0) <= dwben_sig;
+
+                for i in 1 to MEM_LATENCY-2 loop
+                    iadr(i)  <= iadr(i-1); 
+                    irack(i) <= irack(i-1);
+                    dadr(i)  <= dadr(i-1); 
+                    drack(i) <= drack(i-1);
+                    dwack(i) <= dwack(i-1);
+                    dwdat(i) <= dwdat(i-1);
+                    dwben(i) <= dwben(i-1); 
+                end loop;
+            end if;
+        end process;
+
+        iadr_dly  <= iadr(MEM_LATENCY-2) ;
+        irack_dly <= irack(MEM_LATENCY-2);
+        dadr_dly  <= dadr(MEM_LATENCY-2) ;
+        drack_dly <= drack(MEM_LATENCY-2);
+        dwack_dly <= dwack(MEM_LATENCY-2);
+        dwdat_dly <= dwdat(MEM_LATENCY-2);
+        dwben_dly <= dwben(MEM_LATENCY-2);
+
+    end generate;
+
+
+        
+
     np_iread : process
         variable v_dat : std_logic_vector(31 downto 0);
     begin
-        dut.istall <= '0';
-        wait until rising_edge(clk) and dut.iren = '1';
-        if (sv_mem_latency = 1) then
-            dut.istall <= '0';
-            v_dat := read_word(memory_dut, to_integer(unsigned(dut.iaddr(ADDR_WIDTH-1 downto 0))), 4);
+        wait until rising_edge(clk);
+        if (irack_dly) then 
+            dut.iack <= '1';
+            v_dat := read_word(memory_dut, to_integer(unsigned(iadr_dly(ADDR_WIDTH-1 downto 0))), 4);
             dut.irdat <= v_dat;
         else 
-            dut.istall <= '1';
-            v_dat := (others=>'X');
-            dut.irdat <= v_dat;
-
-            for i in 0 to sv_mem_latency-2 loop
-                wait until rising_edge(clk);
-            end loop;
-
-            dut.istall <= '0';
-            v_dat := read_word(memory_dut, to_integer(unsigned(dut.iaddr(ADDR_WIDTH-1 downto 0))), 4);
-            dut.irdat <= v_dat;
+            dut.iack <= '0';
+            dut.irdat <= (others=>'X');
         end if; 
-        
-        
     end process;
 
     np_dread : process
         variable v_dat : std_logic_vector(31 downto 0);
     begin
-        wait until rising_edge(clk) and dut.dren = '1';
-        v_dat := read_word(memory_dut, to_integer(unsigned(dut.daddr(ADDR_WIDTH-1 downto 0))), 4);
-        dut.drdat <= v_dat;
+        wait until rising_edge(clk);
+        if (drack_dly) then 
+            v_dat := read_word(memory_dut, to_integer(unsigned(dadr_dly(ADDR_WIDTH-1 downto 0))), 4);
+            dut.drdat <= v_dat;
+        else 
+            dut.drdat <= (others=>'X');
+        end if; 
     end process;
 
     np_dwrite : process
     begin
-        wait until rising_edge(clk) and dut.dwen = '1';
-        if (dut.dben(0)) then 
-            write_word(memory_dut, to_integer(unsigned(dut.daddr(ADDR_WIDTH-1 downto 0)) + 0), dut.dwdat(7 downto 0));
-        end if; 
-        if (dut.dben(1)) then 
-            write_word(memory_dut, to_integer(unsigned(dut.daddr(ADDR_WIDTH-1 downto 0)) + 1), dut.dwdat(15 downto 8));
-        end if; 
-        if (dut.dben(2)) then 
-            write_word(memory_dut, to_integer(unsigned(dut.daddr(ADDR_WIDTH-1 downto 0)) + 2), dut.dwdat(23 downto 16));
-        end if; 
-        if (dut.dben(3)) then 
-            write_word(memory_dut, to_integer(unsigned(dut.daddr(ADDR_WIDTH-1 downto 0)) + 3), dut.dwdat(31 downto 24));
-        end if; 
+        wait until rising_edge(clk);
+        if (dwack_dly) then 
+            if (dwben_dly(0)) then 
+                write_word(memory_dut, to_integer(unsigned(dadr_dly(ADDR_WIDTH-1 downto 0)) + 0), dwdat_dly(7 downto 0));
+            end if; 
+            if (dwben_dly(1)) then 
+                write_word(memory_dut, to_integer(unsigned(dadr_dly(ADDR_WIDTH-1 downto 0)) + 1), dwdat_dly(15 downto 8));
+            end if; 
+            if (dwben_dly(2)) then 
+                write_word(memory_dut, to_integer(unsigned(dadr_dly(ADDR_WIDTH-1 downto 0)) + 2), dwdat_dly(23 downto 16));
+            end if; 
+            if (dwben_dly(3)) then 
+                write_word(memory_dut, to_integer(unsigned(dadr_dly(ADDR_WIDTH-1 downto 0)) + 3), dwdat_dly(31 downto 24));
+            end if;
+        end if;  
     end process;
 
+    np_dack : process
+    begin
+        wait until rising_edge(clk);
+        if (drack_dly or dwack_dly) then 
+            dut.dack <= '1';
+        else 
+            dut.dack <= '0';
+        end if; 
+    end process;
     
     dut.ierr   <= '0';
-    dut.dstall <= '0';
     dut.derr   <= '0';
 
 

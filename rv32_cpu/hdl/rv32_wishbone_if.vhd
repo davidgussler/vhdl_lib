@@ -4,7 +4,7 @@
 -- # Copyright 2022, David Gusser
 -- # ===========================================================================
 -- # File     : rv32_wishbone_if.vhd
--- # Author   : David Gussler - davidnguss@gmail.com 
+-- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
 -- # Bridge for CPU memory bus master transactions to wishbone bus master

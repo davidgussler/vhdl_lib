@@ -4,7 +4,7 @@
 -- # Copyright 2022, David Gusser
 -- # ===========================================================================
 -- # File     : wb_mtime.vhd
--- # Author   : David Gussler - davidnguss@gmail.com 
+-- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
 -- # 
