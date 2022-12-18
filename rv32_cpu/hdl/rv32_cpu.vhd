@@ -44,7 +44,7 @@ entity rv32_cpu is
         o_fencei    : out std_logic;
         i_irdat     : in  std_logic_vector(31 downto 0);
         i_iack      : in  std_logic; 
-        i_ierror    : in  std_logic;
+        i_ierr    : in  std_logic;
 
         -- Data Interface 
         o_dren      : out std_logic;
@@ -55,7 +55,7 @@ entity rv32_cpu is
         o_fence     : out std_logic;
         i_drdat     : in  std_logic_vector(31 downto 0);
         i_dack      : in  std_logic; 
-        i_derror    : in  std_logic;
+        i_derr    : in  std_logic;
 
         -- Interrupts
         i_ms_irq   : in  std_logic; 
@@ -100,7 +100,7 @@ begin
     o_debug <= '0'; 
 
     -- =========================================================================
-    -- Program Counter Stage ===================================================
+    -- Jump Stage ==============================================================
     -- =========================================================================
 
     -- Handle Interrupts & Exceptions ------------------------------------------
@@ -111,13 +111,13 @@ begin
     begin
         if (rising_edge(i_clk)) then
             if (i_rst) then
-                pc.dly_mip_msi <= '0';
-                pc.dly_mip_mti <= '0';
-                pc.dly_mip_mei <= '0';
+                jp.dly_mip_msi <= '0';
+                jp.dly_mip_mti <= '0';
+                jp.dly_mip_mei <= '0';
             else
-                pc.dly_mip_msi <= ex.csr.mip_msi;
-                pc.dly_mip_mti <= ex.csr.mip_mti;
-                pc.dly_mip_mei <= ex.csr.mip_mei;
+                jp.dly_mip_msi <= ex.csr.mip_msi;
+                jp.dly_mip_mti <= ex.csr.mip_mti;
+                jp.dly_mip_mei <= ex.csr.mip_mei;
             end if;
         end if;
     end process;
@@ -133,13 +133,53 @@ begin
     -- the the flow will jump to the trap addr again, even if we haven't gotten an mret
     -- instruciton. In practice this shouldn't be an issue (assuming the NVIC external to the 
     -- cpu is designed well)
-    pc.trap.ms_irq <= (ex.csr.mip_msi and (not pc.dly_mip_msi or ex.mret)) and ex.csr.mie_msi and ex.csr.mstatus_mie; 
-    pc.trap.mt_irq <= (ex.csr.mip_mti and (not pc.dly_mip_mti or ex.mret)) and ex.csr.mie_mti and ex.csr.mstatus_mie; 
-    pc.trap.me_irq <= (ex.csr.mip_mei and (not pc.dly_mip_mei or ex.mret)) and ex.csr.mie_mei and ex.csr.mstatus_mie; 
+    -- The following signals indicate an interrupt signal low to high transition
+    jp.ms_pulse <= (ex.csr.mip_msi and (not pc.dly_mip_msi or ex.mret)) and ex.csr.mie_msi and ex.csr.mstatus_mie; 
+    jp.mt_pulse <= (ex.csr.mip_mti and (not pc.dly_mip_mti or ex.mret)) and ex.csr.mie_mti and ex.csr.mstatus_mie; 
+    jp.me_pulse <= (ex.csr.mip_mei and (not pc.dly_mip_mei or ex.mret)) and ex.csr.mie_mei and ex.csr.mstatus_mie; 
+
+    -- The following signals latch the interrupt pulse high until the next valid 
+    -- instruction is fetched
+    process (i_clk)
+    begin
+        if (rising_edge(i_clk)) then
+            if (i_rst) then
+                jp.dly_mip_msi <= '0';
+                jp.dly_mip_mti <= '0';
+                jp.dly_mip_mei <= '0';
+            else
+                if (jp.ms_pulse) then
+                    jp.ms_latch <= '1';
+                elsif (id.valid) then
+                    jp.ms_latch <= '0';
+                end if;
+
+                if (jp.mt_pulse) then
+                    jp.mt_latch <= '1';
+                elsif (id.valid) then
+                    jp.mt_latch <= '0';
+                end if;
+
+                if (jp.me_pulse) then
+                    jp.me_latch <= '1';
+                elsif (id.valid) then
+                    jp.me_latch <= '0';
+                end if;
+
+            end if;
+        end if;
+    end process;
+
+    -- These signals pulse high on the next valid instruction after an interrupt 
+    -- has been detected. The instruction that this signal pulses on will have 
+    -- its address written in the mepc csr. 
+    id.trap.ms_irq <= jp.ms_latch and id.valid; 
+    id.trap.mt_irq <= jp.mt_latch and id.valid; 
+    id.trap.me_irq <= jp.me_latch and id.valid; 
 
     
     -- All Exceptions and Interrupts
-    pc.trap_taken <= pc.trap.ms_irq or pc.trap.mt_irq or pc.trap.me_irq or 
+    jp.trap_taken <= id.trap.ms_irq or id.trap.mt_irq or id.trap.me_irq or 
                      m1.trap.load_adr_ma or m2.trap.load_access or 
                      m1.trap.store_adr_ma or m2.trap.store_access or 
                      ex.trap.illeg_instr or ex.trap.ecall or ex.trap.ebreak or 
@@ -177,159 +217,57 @@ begin
 
     
 
-    -- Program Counter ------------------------------------------------
+    -- Change of flow address --------------------------------------------------
     -- -------------------------------------------------------------------------
-    ap_pc : process (all) 
+    ap_jump_addr : process (all) 
     begin
         if (ex.mret) then
-            pc.pc <= pc.pc_fw_mepc(31 downto 2) & b"00"; 
+            jp.jump_addr <= pc.pc_fw_mepc(31 downto 2) & b"00"; 
         elsif (pc.trap_taken) then -- Must have higher priority than branch 
-            pc.pc <= pc.pc_fw_mtvec(31 downto 2) & b"00";
+            jp.jump_addr <= pc.pc_fw_mtvec(31 downto 2) & b"00";
         elsif (id.br_taken) then
-            pc.pc <= id.brt_adr; 
+            jp.jump_addr <= id.brt_adr; 
         else 
-            pc.pc <= std_logic_vector(unsigned(f1.pc) + 4);  
+            jp.jump_addr <= (others=>'-');  
         end if;
     end process;
+
+    jp.jump <= ex.mret or pc.trap_taken or id.br_taken;
     
-    
-    sp_pc_f1_regs : process (i_clk)
-    begin
-        if rising_edge(i_clk) then
-            if (i_rst or hz.f1_flush) then
-                f1.pc          <= G_RESET_ADDR(31 downto 2) & b"00";
-                f1.trap.ms_irq <= '0';
-                f1.trap.mt_irq <= '0';
-                f1.trap.me_irq <= '0';
-                --f1.iren        <= '1';
-            elsif (hz.f1_enable) then
-                f1.pc          <= pc.pc;
-                f1.trap.ms_irq <= pc.trap.ms_irq;
-                f1.trap.mt_irq <= pc.trap.mt_irq;
-                f1.trap.me_irq <= pc.trap.me_irq;
-                --f1.iren        <= '1';
-            else 
-                --f1.iren        <= '0'; -- Don't want to send repeat requests to memory on a stall
-            end if;
-        end if;
-    end process;
-
 
 
     -- =========================================================================
-    -- Fetch 1 Stage ===========================================================
+    -- Fetch Stage =============================================================
     -- =========================================================================
-    -- Instruction data request
-    o_iren  <= f1.iren;
-    o_iaddr <= f1.pc;
-
-    f1.trap.instr_adr_ma <= (f1.pc(0) or f1.pc(1)) and o_iren;
-    f1.iren <= hz.f2_enable;  
-
-    sp_f1_f2_regs : process (i_clk)
-    begin 
-        if rising_edge(i_clk) then
-            if (i_rst or hz.f2_flush) then
-                f2.pc                <= (others=>'-');
-                f2.trap.ms_irq       <= '0';
-                f2.trap.mt_irq       <= '0';
-                f2.trap.me_irq       <= '0';
-                f2.trap.instr_adr_ma <= '0'; 
-                f2.asdf              <= '0'; 
-                f2.iren <= '0';
-            elsif (hz.f2_enable) then
-                f2.pc                <= f1.pc;
-                f2.trap.ms_irq       <= f1.trap.ms_irq;
-                f2.trap.mt_irq       <= f1.trap.mt_irq;
-                f2.trap.me_irq       <= f1.trap.me_irq;
-                f2.trap.instr_adr_ma <= f1.trap.instr_adr_ma; 
-                f2.asdf              <= '1'; 
-                f2.iren <= f1.iren;
-            end if;
-        end if;
-    end process;
-
-    -- From F2's perspective, F1 is always inititiating a mem request after reset. 
-    -- only used for determining memory stalls
-    -- sp_f2_iren : process (i_clk)
-    -- begin
-    --     if rising_edge(i_clk) then
-    --         if (i_rst) then
-    --             f2.iren <= '0';
-    --         elsif (f1.iren) then
-    --             f2.iren <= '1'; 
-    --         end if;             
-    --     end if;
-    -- end process;
-
-    -- Used for flushing the f2 valid signal. needed because this valid sig 
-    -- is not known till f2 stage. 
-    -- sp_f2_flush_dly1 : process (i_clk)
-    -- begin
-    --     if rising_edge(i_clk) then
-    --         if (i_rst) then
-    --             f2.flush_dly1 <= '0';
-    --         elsif (hz.f2_enable) then
-    --             f2.flush_dly1 <= hz.f2_flush; 
-    --         end if;         
-    --     end if;
-    -- end process;
+    u_fetch_unit : entity work.rv32_fetch
+    generic map (
+        G_RESET_ADDR => G_RESET_ADDR
+    )
+    port map (
+        -- Clock & Reset
+        i_clk       => i_clk,
+        i_rst       => i_rst,
+        
+        -- Instruction Memory Interface 
+        o_iren      => o_iren,
+        o_iaddr     => o_iaddr,
+        i_iack      => i_iack,
+        i_idata     => i_irdat,
+        i_ierr      => i_ierr,
 
 
-    -- =========================================================================
-    -- Fetch 2 Stage ===========================================================
-    -- =========================================================================
-    -- Instruction data response 
-    -- This is when we find out if there was a bad or stalled memory access
-    
-    ap_asdfasdf1 : process (i_clk)
-    begin
-        if rising_edge(i_clk) then 
-            if (i_iack and not hz.f2_enable) then
-                f2.i_ierror_reg <= i_ierror;
-                f2.i_iack_reg <= i_iack;
-                f2.i_irdat_reg <= i_irdat; 
-            end if; 
-        end if;
-    end process;
+        -- CPU Interface
+        i_jump        => jp.jump,
+        i_jump_addr   => jp.jump_addr,
+        o_pc          => id.pc, 
+        o_instr       => id.instr,
+        o_valid       => id.valid,
+        i_ready       => hz.id_enable, 
+        o_iaddr_ma    => ex.trap.instr_adr_ma,
+        o_iaccess_err => ex.trap.instr_access
+    );
 
-    ap_asdfasdf : process (all)
-    begin
-        if (hz.f2_enable) then
-            f2.trap.instr_access <= f2.iren and i_ierror; 
-            f2.valid <= i_iack and f2.asdf; 
-            f2.instr <= i_irdat; 
-        else 
-            f2.trap.instr_access <= f2.iren and f2.i_ierror_reg; 
-            f2.valid <= f2.i_iack_reg and f2.asdf; 
-            f2.instr <= f2.i_irdat_reg;
-        end if;
-    end process;
 
-    sp_f2_id_regs : process (i_clk)
-    begin
-        if rising_edge(i_clk) then
-            if (i_rst or hz.id_flush or not f2.valid) then
-                id.pc                <= (others=>'-'); 
-                id.valid             <= '0'; 
-                id.trap.ms_irq       <= '0'; 
-                id.trap.mt_irq       <= '0'; 
-                id.trap.me_irq       <= '0'; 
-                id.trap.instr_adr_ma <= '0'; 
-                id.trap.instr_access <= '0'; 
-                id.instr             <= (others=>'-'); 
-            elsif (hz.id_enable) then
-                id.pc                <= f2.pc;          
-                id.valid             <= f2.valid;           
-                id.trap.ms_irq       <= f2.trap.ms_irq;       
-                id.trap.mt_irq       <= f2.trap.mt_irq;       
-                id.trap.me_irq       <= f2.trap.me_irq;       
-                id.trap.instr_adr_ma <= f2.trap.instr_adr_ma; 
-                id.trap.instr_access <= f2.trap.instr_access; 
-                id.instr             <= f2.instr; 
-            end if;
-        end if;
-    end process;
 
     -- =========================================================================
     -- Decode Stage ============================================================
@@ -575,7 +513,7 @@ begin
     end process;
 
     -- Illegal instruction exception
-    id.trap.illeg_instr <= id.ctrl.illegal and id.valid; -- TODO: consider removing and valid
+    id.trap.illeg_instr <= id.ctrl.illegal and id.valid;
  
 
     -- Construct the 32-bit signed immediate
@@ -671,10 +609,10 @@ begin
       
 
         -- Control signal indicating that a branch, jal, or jalr has been taken
-        id.br_taken <= id.ctrl.jal or id.ctrl.jalr or (id.ctrl.branch and id.branch);
+        id.br_taken <= (id.ctrl.jal or id.ctrl.jalr or (id.ctrl.branch and id.branch)) and id.valid;
 
         -- Branch, jal, or jalr target address
-        if id.ctrl.jalr then
+        if (id.ctrl.jalr) then
             v_brt_adr := std_logic_vector(signed(id.imm32) + signed(id.id_fw_rs1_dat)); 
             v_brt_adr := v_brt_adr(31 downto 1) & '0';
         else
@@ -1250,8 +1188,8 @@ begin
 
     -- Memory Request ----------------------------------------------------------
     -- -------------------------------------------------------------------------
-    o_dren  <= m1.ctrl.mem_rd and hz.m2_enable;  
-    o_dwen  <= m1.ctrl.mem_wr and hz.m2_enable;  
+    o_dren  <= m1.ctrl.mem_rd;  
+    o_dwen  <= m1.ctrl.mem_wr;  
     o_daddr <= m1.exe_rslt; 
     o_dwdat <= m1.m1_fw_rs2_dat; 
     
@@ -1308,8 +1246,8 @@ begin
     -- =========================================================================
     -- Memory Response
 
-    m2.trap.load_access  <= m2.ctrl.mem_rd and i_derror;
-    m2.trap.store_access <= m2.ctrl.mem_wr and i_derror;
+    m2.trap.load_access  <= m2.ctrl.mem_rd and i_derr;
+    m2.trap.store_access <= m2.ctrl.mem_wr and i_derr;
     m2.drdat <= i_drdat; -- memory read needs to be directly registered for timing
 
     sp_m2_wb_regs : process (i_clk)
@@ -1499,7 +1437,6 @@ begin
     -- Memory transaction hazards
     -- These stall the pipe if a memory access takes > one clockcycle.
     -- All BRAM and/or cache hits should not stall.
-    hz.imem_hazard <= '1' when f2.iren and not i_iack else '0'; 
     hz.dmem_hazard <= '1' when (m2.ctrl.mem_wr or m2.ctrl.mem_rd) and not i_dack else '0';
 
 
@@ -1509,16 +1446,12 @@ begin
     ap_pipeline_ctrl : process (all)
     begin
         -- Defaults 
-        hz.f1_enable <= '1'; 
-        hz.f2_enable <= '1'; 
         hz.id_enable <= '1';
         hz.ex_enable <= '1';
         hz.m1_enable <= '1';
         hz.m2_enable <= '1';
         hz.wb_enable <= '1';
-        hz.f1_flush  <= '0'; 
-        hz.f2_flush  <= '0'; 
-        hz.id_flush  <= '0';
+
         hz.ex_flush  <= '0';
         hz.m1_flush  <= '0';
         hz.m2_flush  <= '0';
@@ -1538,8 +1471,6 @@ begin
         -- Control Hazard Flushes ----------------------------------------------
         -- Memory 2 stage exceptions 
         if (m2.trap.load_access or m2.trap.store_access) then
-            hz.f2_flush  <= '1'; 
-            hz.id_flush  <= '1';
             hz.ex_flush  <= '1';
             hz.m1_flush  <= '1';
             hz.m2_flush  <= '1';
@@ -1548,8 +1479,6 @@ begin
 
         -- Memory 1 stage exceptions 
         if (m1.trap.load_adr_ma or m1.trap.store_adr_ma) then
-            hz.f2_flush  <= '1'; 
-            hz.id_flush  <= '1';
             hz.ex_flush  <= '1';
             hz.m1_flush  <= '1';
             hz.m2_flush  <= '1';
@@ -1561,34 +1490,18 @@ begin
         -- that doesnt kill that instruction
         if (ex.trap.illeg_instr or ex.trap.ecall or ex.trap.ebreak or 
                 ex.trap.instr_adr_ma or ex.trap.instr_access or ex.mret) then
-            hz.f2_flush  <= '1'; 
-            hz.id_flush  <= '1';
             hz.ex_flush  <= '1';
             hz.m1_flush  <= '1';
         end if; 
 
-        -- Decode stage branches
-        if (id.br_taken) then
-            hz.f2_flush  <= '1'; 
-            hz.id_flush  <= '1';
-        end if;
-
-
 
         -- Wait on Memory Accesses ---------------------------------------------
         if (hz.dmem_hazard) then -- pause the pipe while waiting on dmem
-            hz.f1_enable <= '0'; 
-            hz.f2_enable <= '0'; 
             hz.id_enable <= '0';
             hz.ex_enable <= '0';
             hz.m1_enable <= '0';
             hz.m2_enable <= '0';
             hz.wb_flush  <= '1';
-
-        elsif (hz.imem_hazard) then -- pause the pipeline while waiting on the imem
-            hz.f1_enable <= '0'; 
-            hz.f2_enable <= '0'; 
-            hz.id_flush  <= '1';
         end if;
 
 
@@ -1596,8 +1509,6 @@ begin
         -- Decode Stage Stalls
         if (hz.id_ex_br_hazard or hz.id_ex_jalr_hazard or hz.id_m1_br_hazard or
                 hz.id_m1_jalr_hazard or hz.id_m2_br_hazard or hz.id_m2_jalr_hazard) then 
-            hz.f1_enable <= '0'; 
-            hz.f2_enable <= '0'; 
             hz.id_enable <= '0';
             hz.ex_flush  <= '1'; 
         end if; 
@@ -1605,16 +1516,12 @@ begin
         -- Execute Stage Stalls
         if (hz.ex_m1_csr_hazard or hz.ex_m1_alu_hazard or hz.ex_m2_csr_hazard or 
                 hz.ex_m2_alu_hazard or hz.ex_m1_ls_hazard) then 
-            hz.f1_enable <= '0'; 
-            hz.f2_enable <= '0'; 
             hz.id_enable <= '0';
             hz.ex_enable <= '0';
             hz.m1_flush  <= '1'; 
         end if; 
         
     end process;
-
-
 
 
 

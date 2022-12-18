@@ -7,8 +7,19 @@
 -- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
--- # 
+-- # This module fetches the instructions from memory. It also handles 
+-- # changes in control flow by invalidating instruction accesses that are 
+-- # still "in fly" at the time of the jump request. In essense, this 
+-- # module guarentees that the next instruction output is the valid.  
+-- # There can be up to two pipelined instruction memory accesses "in fly" at 
+-- # The same time. This allows our memory interface to be fully synchronous 
+-- # while also maintaining a maximum throughput of one instruction per cycle.
+-- # I eventually decided to make this fetch unit its own seperate module 
+-- # because it was starting to get more complicated than I initally imagined.
 -- #############################################################################
+
+-- TODO: Add the two instruction errors in here too
+
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -35,13 +46,14 @@ entity rv32_fetch is
 
 
         -- CPU Interface
-        i_jump      : in  std_logic; 
-        i_jump_addr : in  std_logic_vector(31 downto 0);
-
-        o_pc        : out  std_logic_vector(31 downto 0);
-        o_instr     : out  std_logic_vector(31 downto 0);
-        o_valid     : out  std_logic; 
-        i_ready     : in  std_logic
+        i_jump        : in  std_logic; 
+        i_jump_addr   : in  std_logic_vector(31 downto 0);
+        o_pc          : out  std_logic_vector(31 downto 0);
+        o_instr       : out  std_logic_vector(31 downto 0);
+        o_valid       : out  std_logic; 
+        i_ready       : in  std_logic;
+        o_iaddr_ma    : out std_logic; 
+        o_iaccess_err : out std_logic 
     );
 end entity;
 
@@ -60,6 +72,9 @@ architecture rtl of rv32_fetch is
    signal state, nxt_state : state_t;
 
 begin 
+
+    o_iaddr_ma   <= '0'; -- TODO: 
+    o_iaccess_err <= '0'; -- TODO: 
 
     -- Instruction read enable -------------------------------------------------
     -- -------------------------------------------------------------------------
@@ -128,7 +143,7 @@ begin
     
         -- Write Port
         i_wr           => o_iren,
-        i_dat          => o_iaddr,
+        i_dat(31 downto 0)  => o_iaddr,
         o_almost_full  => open, 
         o_full         => open, 
     
