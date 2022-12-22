@@ -675,7 +675,7 @@ begin
         o_fencei => dut.fencei,
         i_irdat  => dut.irdat ,
         i_iack   => dut.iack,
-        i_ierror => dut.ierr,
+        i_ierr   => dut.ierr,
 
         -- Data Interface 
 
@@ -687,7 +687,7 @@ begin
         o_fence  => dut.fence ,
         i_drdat  => dut.drdat ,
         i_dack   => dut.dack,
-        i_derror => dut.derr,   
+        i_derr    => dut.derr,   
 
         -- Interrupts
         i_ms_irq    => dut.ms_irq,

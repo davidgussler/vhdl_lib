@@ -64,9 +64,11 @@ architecture rtl of rv32_fetch is
    signal iren_latch : std_logic;
    signal istall : std_logic;
 
-   signal fifo_iaddr : std_logic;
+   signal fifo_iaddr : std_logic_vector(31 downto 0);
    signal valid_not_killed : std_logic;
    signal fifo2_empty : std_logic;
+   signal fifo2_idat : std_logic_vector(63 downto 0);
+   signal fifo2_odat : std_logic_vector(63 downto 0);
 
    type state_t is (S_IDLE, S_KILL1, S_KILL2);
    signal state, nxt_state : state_t;
@@ -99,7 +101,7 @@ begin
             elsif (o_iren) then
                 iren_latch <= '1';
             elsif (i_iack or i_ierr) then
-                o_iren <= '0';
+                iren_latch <= '0';
             end if;
         end if;
     end process;
@@ -131,11 +133,9 @@ begin
     u_fifo1 : entity work.fifo
     generic map (
         G_WIDTH        => 32,
-        G_DEPTH_L2     => 1,
-        G_ALMOST_FULL  => 1, 
-        G_ALMOST_EMPTY => 1,
+        G_DEPTH_L2     => 2,
         G_MEM_STYLE    => "auto",
-        G_REG_OUTPUT   => FALSE
+        G_FALLTHRU   => TRUE
     )
     port map (
         i_clk    => i_clk, 
@@ -143,26 +143,28 @@ begin
     
         -- Write Port
         i_wr           => o_iren,
-        i_dat(31 downto 0)  => o_iaddr,
-        o_almost_full  => open, 
+        i_dat  => o_iaddr,
+        o_full_nxt     => open, 
         o_full         => open, 
     
         -- Read Port
         i_rd           => i_iack,
         o_dat          => fifo_iaddr, 
-        o_almost_empty => open, 
+        o_empty_nxt    => open, 
         o_empty        => open
     );
 
 
+    fifo2_idat <= i_idata & fifo_iaddr; 
+    o_instr <= fifo2_odat(63 downto 32);
+    o_pc  <= fifo2_odat(31 downto 0);
+    
     u_fifo2 : entity work.fifo
     generic map (
         G_WIDTH        => 64,
-        G_DEPTH_L2     => 1,
-        G_ALMOST_FULL  => 1, 
-        G_ALMOST_EMPTY => 1,
+        G_DEPTH_L2     => 2,
         G_MEM_STYLE    => "auto",
-        G_REG_OUTPUT   => TRUE
+        G_FALLTHRU     => FALSE
     )
     port map (
         i_clk    => i_clk, 
@@ -170,20 +172,18 @@ begin
 
         -- Write Port
         i_wr                => i_iack,
-        i_dat(63 downto 32) => i_idata, 
-        i_dat(31 downto 0)  => fifo_iaddr, 
-        o_almost_full       => open, 
+        i_dat => fifo2_idat, 
+        o_full_nxt          => open, 
         o_full              => open, 
 
         -- Read Port
         i_rd                => i_ready,
-        o_dat(63 downto 32) => o_instr, 
-        o_dat(31 downto 0)  => o_pc, 
-        o_almost_empty      => open, 
-        o_empty             => fifo2_empty
+        o_dat => fifo2_odat, 
+        o_empty_nxt         => open, 
+        o_empty             => open --fifo2_empty
     );
 
-    valid_not_killed <= not fifo2_empty; 
+    -- valid_not_killed <= not fifo2_empty; 
 
 
 
@@ -196,18 +196,21 @@ begin
         -- Default to staying in current state
         nxt_state <= state;
 
-        case state is
+        case (state) is
             when S_IDLE =>
+                o_valid <= valid_not_killed;
                 if (i_jump) then 
                     nxt_state <= S_KILL1;
                 end if;
 
             when S_KILL1 =>
+                o_valid <= '0'; 
                 if (valid_not_killed and i_ready) then 
                     nxt_state <= S_KILL2;
                 end if;
 
             when S_KILL2 =>
+                o_valid <= '0'; 
                 if (valid_not_killed and i_ready) then 
                     nxt_state <= S_IDLE;
                 end if;
@@ -219,24 +222,14 @@ begin
     end process;
 
 
-    -- FSM Output
+    -- FSM State Register
     process (i_clk)
     begin
         if rising_edge(i_clk) then
             if i_rst then
                 state    <= S_IDLE;
-                o_valid  <= '0';
             else 
-                -- Advance the state 
                 state <= nxt_state;
-
-                -- Assign Output
-                case (nxt_state) is
-                    when S_IDLE  => o_valid <= valid_not_killed; 
-                    when S_KILL1 => o_valid <= '0'; 
-                    when S_KILL2 => o_valid <= '0'; 
-                    when others  => null; -- ILLEGAL STATE REACHED
-                end case;
             end if;
         end if;
     end process;

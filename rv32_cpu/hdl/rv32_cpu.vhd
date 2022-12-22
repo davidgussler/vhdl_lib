@@ -77,9 +77,7 @@ architecture rtl of rv32_cpu is
    -- Pipeline stage signals
    -- Signals associated with a stage can either come from the pipeline register
    -- before that phase or be set combinationally within that stage.
-   signal pc : pc_t; --TODO: 
-   signal f1 : f1_t;
-   signal f2 : f2_t;
+   signal jp : jp_t;
    signal id : id_t; 
    signal ex : ex_t;
    signal m1 : m1_t;  
@@ -134,9 +132,9 @@ begin
     -- instruciton. In practice this shouldn't be an issue (assuming the NVIC external to the 
     -- cpu is designed well)
     -- The following signals indicate an interrupt signal low to high transition
-    jp.ms_pulse <= (ex.csr.mip_msi and (not pc.dly_mip_msi or ex.mret)) and ex.csr.mie_msi and ex.csr.mstatus_mie; 
-    jp.mt_pulse <= (ex.csr.mip_mti and (not pc.dly_mip_mti or ex.mret)) and ex.csr.mie_mti and ex.csr.mstatus_mie; 
-    jp.me_pulse <= (ex.csr.mip_mei and (not pc.dly_mip_mei or ex.mret)) and ex.csr.mie_mei and ex.csr.mstatus_mie; 
+    jp.ms_pulse <= (ex.csr.mip_msi and (not jp.dly_mip_msi or ex.mret)) and ex.csr.mie_msi and ex.csr.mstatus_mie; 
+    jp.mt_pulse <= (ex.csr.mip_mti and (not jp.dly_mip_mti or ex.mret)) and ex.csr.mie_mti and ex.csr.mstatus_mie; 
+    jp.me_pulse <= (ex.csr.mip_mei and (not jp.dly_mip_mei or ex.mret)) and ex.csr.mie_mei and ex.csr.mstatus_mie; 
 
     -- The following signals latch the interrupt pulse high until the next valid 
     -- instruction is fetched
@@ -150,19 +148,19 @@ begin
             else
                 if (jp.ms_pulse) then
                     jp.ms_latch <= '1';
-                elsif (id.valid) then
+                elsif (id.valid and hz.id_enable) then
                     jp.ms_latch <= '0';
                 end if;
 
                 if (jp.mt_pulse) then
                     jp.mt_latch <= '1';
-                elsif (id.valid) then
+                elsif (id.valid and hz.id_enable) then
                     jp.mt_latch <= '0';
                 end if;
 
                 if (jp.me_pulse) then
                     jp.me_latch <= '1';
-                elsif (id.valid) then
+                elsif (id.valid and hz.id_enable) then
                     jp.me_latch <= '0';
                 end if;
 
@@ -173,9 +171,9 @@ begin
     -- These signals pulse high on the next valid instruction after an interrupt 
     -- has been detected. The instruction that this signal pulses on will have 
     -- its address written in the mepc csr. 
-    id.trap.ms_irq <= jp.ms_latch and id.valid; 
-    id.trap.mt_irq <= jp.mt_latch and id.valid; 
-    id.trap.me_irq <= jp.me_latch and id.valid; 
+    id.trap.ms_irq <= jp.ms_latch and (id.valid and hz.id_enable); 
+    id.trap.mt_irq <= jp.mt_latch and (id.valid and hz.id_enable); 
+    id.trap.me_irq <= jp.me_latch and (id.valid and hz.id_enable); 
 
     
     -- All Exceptions and Interrupts
@@ -193,38 +191,38 @@ begin
     begin 
         -- Forwarding MEPC to PC stage. Needed since csrs are not written till wb stage
         if (ex.mret = '1' and m1.csr_access = '1' and m1.csr_adr = CSR_MEPC) then
-            pc.pc_fw_mepc <= m1.csr_wdata(31 downto 2); 
+            jp.pc_fw_mepc <= m1.csr_wdata(31 downto 2); 
         elsif (ex.mret = '1' and m2.csr_access = '1' and m2.csr_adr = CSR_MEPC) then
-            pc.pc_fw_mepc <= m2.csr_wdata(31 downto 2); 
+            jp.pc_fw_mepc <= m2.csr_wdata(31 downto 2); 
         elsif (ex.mret = '1' and wb.csr_access = '1' and wb.csr_adr = CSR_MEPC) then
-            pc.pc_fw_mepc <= wb.csr_wdata(31 downto 2); 
+            jp.pc_fw_mepc <= wb.csr_wdata(31 downto 2); 
         else 
-            pc.pc_fw_mepc <= ex.csr.mtvec(31 downto 2);
+            jp.pc_fw_mepc <= ex.csr.mtvec(31 downto 2);
         end if;
 
 
         -- Forwarding MTVEC to PC stage. Needed since csrs are not written till wb stage
         if (ex.any_trap = '1' and m1.csr_access = '1' and m1.csr_adr = CSR_MTVEC) then
-            pc.pc_fw_mtvec <= m1.csr_wdata(31 downto 2); 
+            jp.pc_fw_mtvec <= m1.csr_wdata(31 downto 2); 
         elsif (ex.any_trap = '1' and m2.csr_access = '1' and m2.csr_adr = CSR_MTVEC) then
-            pc.pc_fw_mtvec <= m2.csr_wdata(31 downto 2); 
+            jp.pc_fw_mtvec <= m2.csr_wdata(31 downto 2); 
         elsif (ex.any_trap = '1' and wb.csr_access = '1' and wb.csr_adr = CSR_MTVEC) then
-            pc.pc_fw_mtvec <= wb.csr_wdata(31 downto 2); 
+            jp.pc_fw_mtvec <= wb.csr_wdata(31 downto 2); 
         else 
-            pc.pc_fw_mtvec <= ex.csr.mtvec; 
+            jp.pc_fw_mtvec <= ex.csr.mtvec; 
         end if;
     end process; 
 
     
 
-    -- Change of flow address --------------------------------------------------
+    -- Change of program flow address ------------------------------------------
     -- -------------------------------------------------------------------------
     ap_jump_addr : process (all) 
     begin
         if (ex.mret) then
-            jp.jump_addr <= pc.pc_fw_mepc(31 downto 2) & b"00"; 
-        elsif (pc.trap_taken) then -- Must have higher priority than branch 
-            jp.jump_addr <= pc.pc_fw_mtvec(31 downto 2) & b"00";
+            jp.jump_addr <= jp.pc_fw_mepc(31 downto 2) & b"00"; 
+        elsif (jp.trap_taken) then -- Must have higher priority than branch 
+            jp.jump_addr <= jp.pc_fw_mtvec(31 downto 2) & b"00";
         elsif (id.br_taken) then
             jp.jump_addr <= id.brt_adr; 
         else 
@@ -232,7 +230,7 @@ begin
         end if;
     end process;
 
-    jp.jump <= ex.mret or pc.trap_taken or id.br_taken;
+    jp.jump <= ex.mret or jp.trap_taken or id.br_taken;
     
 
 
@@ -254,7 +252,6 @@ begin
         i_iack      => i_iack,
         i_idata     => i_irdat,
         i_ierr      => i_ierr,
-
 
         -- CPU Interface
         i_jump        => jp.jump,
@@ -666,7 +663,7 @@ begin
             -- We also explicitly flush this stage on the next cycle after last stage was flushed 
             -- this is necessary because the control signals generated in the decode 
             -- stage cannot be flushed the same cycle they are created. 
-            if (i_rst or hz.ex_flush or not id.valid) then
+            if (i_rst or hz.ex_flush or (not id.valid and hz.ex_enable)) then
                 ex.pc                <= (others=>'-'); 
                 ex.valid             <= '0'; 
                 ex.trap.ms_irq       <= '0';
@@ -1133,7 +1130,7 @@ begin
     sp_ex_m1_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst or hz.m1_flush or not ex.valid) then
+            if (i_rst or hz.m1_flush) then
                 m1.pc           <= (others=>'-');
                 m1.valid        <= '0';
                 m1.ctrl.reg_wr  <= '0';
@@ -1210,7 +1207,7 @@ begin
     sp_m1_m2_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst or hz.m2_flush or not m1.valid) then
+            if (i_rst or hz.m2_flush) then
                 m2.valid        <= '0'; 
                 m2.pc           <= (others=>'-');
                 m2.ctrl.reg_wr  <= '0'; 
@@ -1253,7 +1250,7 @@ begin
     sp_m2_wb_regs : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst or hz.wb_flush or not m2.valid) then
+            if (i_rst or hz.wb_flush) then
                 wb.valid        <= '0'; 
                 wb.pc4          <= (others=>'-');
                 wb.ctrl.reg_wr  <= '0'; 

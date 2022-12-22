@@ -335,47 +335,24 @@ package rv32_pkg is
     end record;
 
 
-    -- pc_c -----------------------------------------
-    -- -------------------------------------------------------------------------
-    type pc_t is record
-        -- Pipelined into next stage 
-        pc   : std_logic_vector(31 downto 0);  
-        trap : trap_t;
-
-
-        -- Not pipelined into next stage 
-        dly_mip_msi        : std_logic; 
-        dly_mip_mti        : std_logic; 
-        dly_mip_mei        : std_logic; 
-        trap_taken         : std_logic;
-        pc_fw_mepc         : std_logic_vector(31 downto 2);  
-        pc_fw_mtvec        : std_logic_vector(31 downto 2);  
-    end record;
-
-    -- Instruction Fetch Request Stage -----------------------------------------
-    -- -------------------------------------------------------------------------
-    type f1_t is record
-        -- Pipelined into next stage 
-        pc   : std_logic_vector(31 downto 0);  
-        trap : trap_t;
-        iren : std_logic; 
-    end record;
-
     -- Instruction Fetch Response Stage ----------------------------------------
     -- -------------------------------------------------------------------------
-    type f2_t is record
-        -- Pipelined into next stage 
-        pc    : std_logic_vector(31 downto 0);  
-        valid : std_logic;
-        instr : std_logic_vector(31 downto 0);
-        trap  : trap_t;
-        asdf : std_logic;
-        i_ierror_reg: std_logic;
-        i_iack_reg: std_logic;
-        i_irdat_reg: std_logic_vector(31 downto 0);
+    type jp_t is record
+        dly_mip_msi   : std_logic; 
+        dly_mip_mti   : std_logic; 
+        dly_mip_mei   : std_logic; 
+        ms_pulse      : std_logic; 
+        mt_pulse      : std_logic; 
+        me_pulse      : std_logic; 
+        ms_latch      : std_logic; 
+        mt_latch      : std_logic; 
+        me_latch      : std_logic; 
+        trap_taken    : std_logic; 
+        pc_fw_mepc    : std_logic_vector(31 downto 2); 
+        pc_fw_mtvec   : std_logic_vector(31 downto 2); 
+        jump_addr     : std_logic_vector(31 downto 0); 
+        jump          : std_logic; 
 
-        -- Not pipelined into next stage 
-        iren : std_logic; 
     end record;
 
  
