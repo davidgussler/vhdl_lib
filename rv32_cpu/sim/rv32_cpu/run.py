@@ -28,18 +28,15 @@ lib.add_source_files("./../../hdl/rv32_fetch.vhd")
 lib.add_source_files("./../../hdl/rv32_cpu.vhd")
 
 
+# Debugging visibility 
+lib.set_compile_option("modelsim.vcom_flags", ["+acc",  "-O0"])
 
 
-
-lib.set_sim_option("modelsim.vsim_flags", ["voptargs=+acc"])
-
-# Enable Coverage
-lib.set_compile_option("enable_coverage", True)
-lib.set_compile_option("modelsim.vcom_flags", ["+cover=sbceft"])
-lib.set_sim_option("enable_coverage", True)
-lib.set_sim_option("modelsim.vsim_flags", ["-coverage"])
-
-
+# # Enable Coverage
+# lib.set_compile_option("enable_coverage", True)
+# lib.set_compile_option("modelsim.vcom_flags", ["+cover=sbceft"])
+# lib.set_sim_option("enable_coverage", True)
+# lib.set_sim_option("modelsim.vsim_flags", ["-coverage"])
 
 
 # Run vunit function

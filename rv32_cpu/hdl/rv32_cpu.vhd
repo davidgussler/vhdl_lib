@@ -260,8 +260,8 @@ begin
         o_instr       => id.instr,
         o_valid       => id.valid,
         i_ready       => hz.id_enable, 
-        o_iaddr_ma    => ex.trap.instr_adr_ma,
-        o_iaccess_err => ex.trap.instr_access
+        o_iaddr_ma    => id.trap.instr_adr_ma,
+        o_iaccess_err => id.trap.instr_access
     );
 
 

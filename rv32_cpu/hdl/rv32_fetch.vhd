@@ -12,7 +12,7 @@
 -- # still "in fly" at the time of the jump request. In essense, this 
 -- # module guarentees that the next instruction output is the valid.  
 -- # There can be up to two pipelined instruction memory accesses "in fly" at 
--- # The same time. This allows our memory interface to be fully synchronous 
+-- # the same time. This allows our memory interface to be fully synchronous 
 -- # while also maintaining a maximum throughput of one instruction per cycle.
 -- # I eventually decided to make this fetch unit its own seperate module 
 -- # because it was starting to get more complicated than I initally imagined.
@@ -80,6 +80,7 @@ begin
 
     -- Instruction read enable -------------------------------------------------
     -- -------------------------------------------------------------------------
+    -- Read request to external memory
     sp_iren : process (i_clk)
     begin
         if rising_edge(i_clk) then
@@ -93,11 +94,13 @@ begin
         end if;
     end process;
 
+    -- Memory request has been initiated and is in-progress while this bit is 
+    -- high
     sp_iren_latch : process (i_clk)
     begin
         if rising_edge(i_clk) then
             if (i_rst) then
-                iren_latch <= '1';
+                iren_latch <= '0';
             elsif (o_iren) then
                 iren_latch <= '1';
             elsif (i_iack or i_ierr) then
@@ -106,21 +109,31 @@ begin
         end if;
     end process;
 
+    -- Need to stall if we dont receive a response from memory the cycle after
+    -- the request was made. 
     istall <= iren_latch and not i_iack; 
+
+    -- Stop sending memory requests if we didnt receive a response on the 
+    -- cycle after the request or if later pipeline stages are stalled (due to 
+    -- data or structural hazards). 
     iren_en <= not istall and i_ready; 
 
 
     -- Instruction address -----------------------------------------------------
     -- -------------------------------------------------------------------------
+    -- TODO: this logic is good. need to think thru the situation where only one 
+    -- transaction is in progress (rather than 2) (how would i know this?)
+    -- and change the fsm to only kill one instruction rather than 2
+    -- Memory request address. Increment it every time the previous addr is sent
     sp_iaddr : process (i_clk)
     begin
         if rising_edge(i_clk) then
             if (i_rst) then
                 o_iaddr <= G_RESET_ADDR;
-            elsif (iren_en) then
+            else 
                 if (i_jump) then
                     o_iaddr <= i_jump_addr; 
-                else 
+                elsif (o_iren) then
                     o_iaddr <= std_logic_vector(unsigned(o_iaddr) + 4);
                 end if; 
             end if;
@@ -128,14 +141,20 @@ begin
     end process;
 
 
+
     -- Elastic Pipeline FIFOs --------------------------------------------------
     -- -------------------------------------------------------------------------
+    -- Since up to two requests may be sent without immediatly receiving a response
+    -- pass the request addresses (aka PCs) thru a fifo. 
+    -- address gets read out and stored to the next fifo when a memory response 
+    -- arrives. Note that this is a fallthru fifo, meaning that first write data
+    -- becomes available at the output the cycle after the write. 
     u_fifo1 : entity work.fifo
     generic map (
-        G_WIDTH        => 32,
-        G_DEPTH_L2     => 2,
-        G_MEM_STYLE    => "auto",
-        G_FALLTHRU   => TRUE
+        G_WIDTH     => 32,
+        G_DEPTH_L2  => 2, -- depth = 2^2-1 = 3
+        G_MEM_STYLE => "auto",
+        G_FALLTHRU  => TRUE
     )
     port map (
         i_clk    => i_clk, 
@@ -143,7 +162,7 @@ begin
     
         -- Write Port
         i_wr           => o_iren,
-        i_dat  => o_iaddr,
+        i_dat          => o_iaddr,
         o_full_nxt     => open, 
         o_full         => open, 
     
@@ -155,16 +174,22 @@ begin
     );
 
 
+    -- Build and split the vectors into and out of fifo2
     fifo2_idat <= i_idata & fifo_iaddr; 
     o_instr <= fifo2_odat(63 downto 32);
     o_pc  <= fifo2_odat(31 downto 0);
     
+    -- Memory response (i_idata) is validated by i_ack. The memory response's 
+    -- corresponding request address comes from fifo1. If a cpu pipeline stage 
+    -- after this one stalls this stage (by de-asserting ready_i) while we are 
+    -- waiting on outstanding requests, then the responses will get stored in
+    -- this buffer untill ready_i goes high again.
     u_fifo2 : entity work.fifo
     generic map (
-        G_WIDTH        => 64,
-        G_DEPTH_L2     => 2,
-        G_MEM_STYLE    => "auto",
-        G_FALLTHRU     => FALSE
+        G_WIDTH     => 64,
+        G_DEPTH_L2  => 2, -- depth = 2^2-1 = 3
+        G_MEM_STYLE => "auto",
+        G_FALLTHRU  => TRUE
     )
     port map (
         i_clk    => i_clk, 
@@ -172,23 +197,39 @@ begin
 
         -- Write Port
         i_wr                => i_iack,
-        i_dat => fifo2_idat, 
+        i_dat               => fifo2_idat, 
         o_full_nxt          => open, 
         o_full              => open, 
 
         -- Read Port
         i_rd                => i_ready,
-        o_dat => fifo2_odat, 
+        o_dat               => fifo2_odat, 
         o_empty_nxt         => open, 
-        o_empty             => open --fifo2_empty
+        o_empty             => fifo2_empty
     );
 
-    -- valid_not_killed <= not fifo2_empty; 
+    valid_not_killed <= not fifo2_empty;
 
+    -- next instruction is valid if there was a read to non-empty fifo2
+    -- if the rest of the pipeline is not ready for new instructions, then 
+    -- valid should maintain its last value. 
+    -- process (i_clk)
+    -- begin
+    --     if rising_edge(i_clk) then
+    --         if (i_rst) then
+    --             valid_not_killed <= '0';
+    --         elsif (i_ready) then 
+    --             valid_not_killed <= not fifo2_empty;
+    --         end if;
+    --     end if;
+    -- end process;
 
 
     -- Jump Invalidations ------------------------------------------------------
     -- -------------------------------------------------------------------------
+    -- If a change in program flow has been requested by a later pipeline stage,
+    -- then we need to kill the two instructions that were speculatively fetched 
+    -- before the branch/jump/interrupt/exception happened.
 
     -- FSM Next State
     process (all)
@@ -198,8 +239,12 @@ begin
 
         case (state) is
             when S_IDLE =>
+                -- Business as usual 
                 o_valid <= valid_not_killed;
-                if (i_jump) then 
+
+                -- If jump request & the pipeline is ready for a new instruction,
+                -- then kill the next two "in-fly" instructions
+                if (i_jump and i_ready) then 
                     nxt_state <= S_KILL1;
                 end if;
 
@@ -227,7 +272,7 @@ begin
     begin
         if rising_edge(i_clk) then
             if i_rst then
-                state    <= S_IDLE;
+                state <= S_IDLE;
             else 
                 state <= nxt_state;
             end if;

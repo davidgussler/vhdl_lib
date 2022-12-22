@@ -22,7 +22,7 @@ architecture tb of rv32_cpu_tb is
     constant CLK_PERIOD : time := 10 ns; 
     constant CLK_TO_Q   : time := 1 ns;
 
-    constant MEM_LATENCY : positive := 2; 
+    constant MEM_LATENCY : positive := 5; 
 
     signal clk            : std_logic := '0';
     signal rst            : std_logic := '1';
