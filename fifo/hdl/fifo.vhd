@@ -46,7 +46,9 @@ entity fifo is
       i_rd        : in  std_logic; 
       o_dat       : out std_logic_vector(G_WIDTH-1 downto 0); 
       o_empty_nxt : out std_logic; 
-      o_empty     : out std_logic
+      o_empty     : out std_logic--;
+
+      --o_fill_cnt  : out std_logic_vector(G_DEPTH_L2-1 downto 0)
    );
 end entity;
 
@@ -80,6 +82,7 @@ begin
    o_full_nxt  <= '1' when fifo_cnt >= C_DEPTH-2 else '0';
    o_empty     <= '1' when fifo_cnt = 0          else '0';
    o_empty_nxt <= '1' when fifo_cnt <= 1         else '0';
+   --o_fill_cnt  <= std_logic_vector(fifo_cnt); 
 
    -- Update count
    ap_fifo_count : process (all)

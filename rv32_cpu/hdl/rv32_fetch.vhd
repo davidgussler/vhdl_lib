@@ -69,6 +69,7 @@ architecture rtl of rv32_fetch is
    signal fifo2_empty : std_logic;
    signal fifo2_idat : std_logic_vector(63 downto 0);
    signal fifo2_odat : std_logic_vector(63 downto 0);
+   signal fifo2_cnt  : std_logic_vector(1 downto 0);
    signal jump_latch: std_logic;
    signal jump_addr_latch: std_logic_vector(31 downto 0);
 
@@ -193,7 +194,9 @@ begin
         i_rd           => i_iack,
         o_dat          => fifo_iaddr, 
         o_empty_nxt    => open, 
-        o_empty        => open
+        o_empty        => open--,
+
+        --o_fill_cnt => open
     );
 
 
@@ -228,7 +231,9 @@ begin
         i_rd                => i_ready,
         o_dat               => fifo2_odat, 
         o_empty_nxt         => open, 
-        o_empty             => fifo2_empty
+        o_empty             => fifo2_empty--,
+
+        --o_fill_cnt => fifo2_cnt
     );
 
     valid_not_killed <= not fifo2_empty;
@@ -255,6 +260,18 @@ begin
     -- before the branch/jump/interrupt/exception happened. There could be as 
     -- many as two and as few as zero depending on the CPU's state. 
 
+
+    -- count the number of outstanding transactions from decode stage's perspective 
+    process (i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_rst) then
+                valid_not_killed <= '0';
+            elsif (i_ready) then 
+                valid_not_killed <= not fifo2_empty;
+            end if;
+        end if;
+    end process;
 
 
     -- FSM Next State
