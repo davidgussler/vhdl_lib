@@ -22,7 +22,7 @@ architecture tb of rv32_cpu_tb is
     constant CLK_PERIOD : time := 10 ns; 
     constant CLK_TO_Q   : time := 1 ns;
 
-    constant MEM_LATENCY : positive := 3; 
+    constant MEM_LATENCY : positive := 4; 
 
     signal clk            : std_logic := '0';
     signal rst            : std_logic := '1';
@@ -34,7 +34,7 @@ architecture tb of rv32_cpu_tb is
 
     constant HART_ID    : std_logic_vector(31 downto 0) := x"0000_0000";
     constant RESET_ADDR : std_logic_vector(31 downto 0) := x"0000_0000";
-    constant TRAP_ADDR  : std_logic_vector(31 downto 0) := x"0000_0800";
+    constant TRAP_ADDR  : std_logic_vector(31 downto 0) := x"0000_0600";
     
     type cpu_t is record 
         iren     : std_logic; 
@@ -236,17 +236,17 @@ architecture tb of rv32_cpu_tb is
 
 
     constant JALR_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
-        0  => rv_addi(1, 0, 4), 
+        0  => rv_addi(1, 0, 4), -- 0
 
-        1  => rv_addi(5, 0, 5),
-        2  => rv_jalr(3, 1, 1000-4),
-        3  => rv_addi(5, 0, 6),
-        4  => rv_sw(0, 5, 1024+1*4),
+        1  => rv_addi(5, 0, 5), -- 4
+        2  => rv_jalr(3, 1, 1000-4), -- 8
+        3  => rv_addi(5, 0, 6), -- c
+        4  => rv_sw(0, 5, 1024+1*4), -- 10
 
-        5  => rv_jal (0, 0),
+        5  => rv_jal (0, 0), --14
 
-        1000/4 => rv_sw(0, 5, 1024),
-        1004/4 => rv_jalr(0, 3, 0),
+        1000/4 => rv_sw(0, 5, 1024), -- 3e8
+        1004/4 => rv_jalr(0, 3, 0), -- 3ec
 
         others => (others=>'0')
     );

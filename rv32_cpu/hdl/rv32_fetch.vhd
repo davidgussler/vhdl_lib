@@ -131,7 +131,7 @@ begin
             if (i_rst) then
                 o_iaddr <= G_RESET_ADDR;
             else 
-                if (o_iren) then
+                if (iren_en) then --o_iren
                     if (i_jump) then
                         o_iaddr <= i_jump_addr; 
                     elsif (jump_latch) then
@@ -153,10 +153,10 @@ begin
                 jump_latch <= '0';
                 jump_addr_latch <= (others=>'-'); 
             else 
-                if (i_jump and not o_iren) then
+                if (i_jump and not iren_en) then
                     jump_latch <= '1'; 
                     jump_addr_latch <= i_jump_addr; 
-                elsif (jump_latch and o_iren) then
+                elsif (jump_latch and iren_en) then
                     jump_latch <= '0';
                 end if; 
             end if;
