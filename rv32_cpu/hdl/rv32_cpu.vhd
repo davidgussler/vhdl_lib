@@ -1464,7 +1464,6 @@ begin
         end if; 
         
 
-
         -- Control Hazard Flushes ----------------------------------------------
         -- Memory 2 stage exceptions 
         if (m2.trap.load_access or m2.trap.store_access) then

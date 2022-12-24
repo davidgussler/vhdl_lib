@@ -22,7 +22,7 @@ architecture tb of rv32_cpu_tb is
     constant CLK_PERIOD : time := 10 ns; 
     constant CLK_TO_Q   : time := 1 ns;
 
-    constant MEM_LATENCY : positive := 5; 
+    constant MEM_LATENCY : positive := 3; 
 
     signal clk            : std_logic := '0';
     signal rst            : std_logic := '1';
@@ -324,29 +324,29 @@ architecture tb of rv32_cpu_tb is
 
 
     constant EXCEPTION_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
-        0  => rv_addi(10, 0, to_integer(unsigned(TRAP_ADDR))), 
-        1  => rv_csrrw(0, 10, to_integer(unsigned(CSR_MTVEC))), -- set the trap handler address    
+        0  => rv_addi(10, 0, to_integer(unsigned(TRAP_ADDR))), -- 0
+        1  => rv_csrrw(0, 10, to_integer(unsigned(CSR_MTVEC))), -- 4 -- set the trap handler address    
 
-        2  => rv_addi(1, 0, 3), 
-        3  => rv_addi(2, 0, 4),  
-        4  => rv_addi(8, 0, 1024),
-        5  => rv_ecall,
+        2  => rv_addi(1, 0, 3), -- 8
+        3  => rv_addi(2, 0, 4),  -- c
+        4  => rv_addi(8, 0, 1024),-- 10
+        5  => rv_ecall,-- 14
 
-        6  => rv_addi(1, 0, 5), 
-        7  => rv_addi(2, 0, 6),
-        8  => rv_addi(8, 0, 1024+8),
-        9  => rv_ebreak,
+        6  => rv_addi(1, 0, 5), -- 18
+        7  => rv_addi(2, 0, 6),-- 1c
+        8  => rv_addi(8, 0, 1024+8),-- 20
+        9  => rv_ebreak, --24
 
-        10 => rv_addi(1, 0, 7), 
-        11 => rv_addi(2, 0, 8),
-        12 => rv_addi(8, 0, 1024+16),
-        13 => rv_sw(8, 1, 0),
-        14 => rv_sw(8, 2, 4), 
+        10 => rv_addi(1, 0, 7),  -- 28
+        11 => rv_addi(2, 0, 8), --2c
+        12 => rv_addi(8, 0, 1024+16),--30
+        13 => rv_sw(8, 1, 0),--34
+        14 => rv_sw(8, 2, 4), --38
 
-        15 => rv_jal (0, 0),
+        15 => rv_jal (0, 0),--3c
 
         -- ecall/ebreak irq handler
-        (to_integer(unsigned(TRAP_ADDR)))/4     => rv_sw(8, 1, 0),
+        (to_integer(unsigned(TRAP_ADDR)))/4     => rv_sw(8, 1, 0), --800
         (to_integer(unsigned(TRAP_ADDR))+4)/4   => rv_sw(8, 2, 4), 
         (to_integer(unsigned(TRAP_ADDR))+4*2)/4 => rv_csrrci(15, 0, to_integer(unsigned(CSR_MEPC))),
         (to_integer(unsigned(TRAP_ADDR))+4*3)/4 => rv_addi(15, 15, 4),  

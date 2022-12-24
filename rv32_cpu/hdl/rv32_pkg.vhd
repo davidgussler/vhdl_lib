@@ -375,6 +375,7 @@ package rv32_pkg is
         csr_access         : std_logic; 
         mret               : std_logic; 
         wfi                : std_logic; 
+        jmp_stall          : std_logic; 
 
         -- Not pipelined into next stage 
         instr              : std_logic_vector(31 downto 0);

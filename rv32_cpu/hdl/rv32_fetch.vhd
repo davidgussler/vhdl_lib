@@ -48,9 +48,9 @@ entity rv32_fetch is
         -- CPU Interface
         i_jump        : in  std_logic; 
         i_jump_addr   : in  std_logic_vector(31 downto 0);
-        o_pc          : out  std_logic_vector(31 downto 0);
-        o_instr       : out  std_logic_vector(31 downto 0);
-        o_valid       : out  std_logic; 
+        o_pc          : out std_logic_vector(31 downto 0);
+        o_instr       : out std_logic_vector(31 downto 0);
+        o_valid       : out std_logic; 
         i_ready       : in  std_logic;
         o_iaddr_ma    : out std_logic; 
         o_iaccess_err : out std_logic 
@@ -69,6 +69,8 @@ architecture rtl of rv32_fetch is
    signal fifo2_empty : std_logic;
    signal fifo2_idat : std_logic_vector(63 downto 0);
    signal fifo2_odat : std_logic_vector(63 downto 0);
+   signal jump_latch: std_logic;
+   signal jump_addr_latch: std_logic_vector(31 downto 0);
 
    type state_t is (S_IDLE, S_KILL1, S_KILL2);
    signal state, nxt_state : state_t;
@@ -110,20 +112,18 @@ begin
     end process;
 
     -- Need to stall if we dont receive a response from memory the cycle after
-    -- the request was made. 
+    -- the first request was made. 
     istall <= iren_latch and not i_iack; 
 
     -- Stop sending memory requests if we didnt receive a response on the 
     -- cycle after the request or if later pipeline stages are stalled (due to 
-    -- data or structural hazards). 
+    -- data or structural hazards). But continue memory requests as usual if 
+    -- the pipeline must be stalled because a jump has been unfufilled. 
     iren_en <= not istall and i_ready; 
 
 
     -- Instruction address -----------------------------------------------------
     -- -------------------------------------------------------------------------
-    -- TODO: this logic is good. need to think thru the situation where only one 
-    -- transaction is in progress (rather than 2) (how would i know this?)
-    -- and change the fsm to only kill one instruction rather than 2
     -- Memory request address. Increment it every time the previous addr is sent
     sp_iaddr : process (i_clk)
     begin
@@ -131,10 +131,33 @@ begin
             if (i_rst) then
                 o_iaddr <= G_RESET_ADDR;
             else 
-                if (i_jump) then
-                    o_iaddr <= i_jump_addr; 
-                elsif (o_iren) then
-                    o_iaddr <= std_logic_vector(unsigned(o_iaddr) + 4);
+                if (o_iren) then
+                    if (i_jump) then
+                        o_iaddr <= i_jump_addr; 
+                    elsif (jump_latch) then
+                        o_iaddr <= jump_addr_latch; 
+                    else 
+                        o_iaddr <= std_logic_vector(unsigned(o_iaddr) + 4);
+                    end if; 
+                end if; 
+            end if;
+        end if;
+    end process;
+
+    -- If we receive a jump request, but are not able to immediatly fufill it, 
+    -- then save the jump address untill we make the request from memory 
+    sp_jmp_store : process (i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_rst) then
+                jump_latch <= '0';
+                jump_addr_latch <= (others=>'-'); 
+            else 
+                if (i_jump and not o_iren) then
+                    jump_latch <= '1'; 
+                    jump_addr_latch <= i_jump_addr; 
+                elsif (jump_latch and o_iren) then
+                    jump_latch <= '0';
                 end if; 
             end if;
         end if;
@@ -228,8 +251,11 @@ begin
     -- Jump Invalidations ------------------------------------------------------
     -- -------------------------------------------------------------------------
     -- If a change in program flow has been requested by a later pipeline stage,
-    -- then we need to kill the two instructions that were speculatively fetched 
-    -- before the branch/jump/interrupt/exception happened.
+    -- then we need to kill any instructions that were speculatively fetched 
+    -- before the branch/jump/interrupt/exception happened. There could be as 
+    -- many as two and as few as zero depending on the CPU's state. 
+
+
 
     -- FSM Next State
     process (all)
@@ -244,7 +270,7 @@ begin
 
                 -- If jump request & the pipeline is ready for a new instruction,
                 -- then kill the next two "in-fly" instructions
-                if (i_jump and i_ready) then 
+                if ((i_jump or jump_latch) and i_ready) then 
                     nxt_state <= S_KILL1;
                 end if;
 
