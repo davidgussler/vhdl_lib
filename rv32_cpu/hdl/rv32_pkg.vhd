@@ -335,24 +335,52 @@ package rv32_pkg is
     end record;
 
 
+    -- pc_c -----------------------------------------
+    -- -------------------------------------------------------------------------
+    type pc_t is record
+        -- Pipelined into next stage 
+        pc   : std_logic_vector(31 downto 0);  
+        trap : trap_t;
+        jump_addr  : std_logic_vector(31 downto 0);  
+        jump : std_logic; 
+        jump_latch_addr : std_logic_vector(31 downto 0);  
+        jump_latch : std_logic; 
+
+        -- Not pipelined into next stage 
+        dly_mip_msi        : std_logic; 
+        dly_mip_mti        : std_logic; 
+        dly_mip_mei        : std_logic; 
+        trap_taken         : std_logic;
+        pc_fw_mepc         : std_logic_vector(31 downto 2);  
+        pc_fw_mtvec        : std_logic_vector(31 downto 2);  
+    end record;
+
+    -- Instruction Fetch Request Stage -----------------------------------------
+    -- -------------------------------------------------------------------------
+    type f1_t is record
+        -- Pipelined into next stage 
+        pc   : std_logic_vector(31 downto 0);  
+        trap : trap_t;
+        iren : std_logic; 
+    end record;
+
     -- Instruction Fetch Response Stage ----------------------------------------
     -- -------------------------------------------------------------------------
-    type jp_t is record
-        dly_mip_msi   : std_logic; 
-        dly_mip_mti   : std_logic; 
-        dly_mip_mei   : std_logic; 
-        ms_pulse      : std_logic; 
-        mt_pulse      : std_logic; 
-        me_pulse      : std_logic; 
-        ms_latch      : std_logic; 
-        mt_latch      : std_logic; 
-        me_latch      : std_logic; 
-        trap_taken    : std_logic; 
-        pc_fw_mepc    : std_logic_vector(31 downto 2); 
-        pc_fw_mtvec   : std_logic_vector(31 downto 2); 
-        jump_addr     : std_logic_vector(31 downto 0); 
-        jump          : std_logic; 
+    type f2_t is record
+        -- Pipelined into next stage 
+        pc    : std_logic_vector(31 downto 0);  
+        valid : std_logic;
+        instr : std_logic_vector(31 downto 0);
+        trap  : trap_t;
+        asdf : std_logic;
+        i_ierror_reg: std_logic;
+        i_iack_reg: std_logic;
+        i_irdat_reg: std_logic_vector(31 downto 0);
 
+        flush_dly : std_logic; 
+
+        -- Not pipelined into next stage 
+        iren : std_logic; 
     end record;
 
  
@@ -375,7 +403,6 @@ package rv32_pkg is
         csr_access         : std_logic; 
         mret               : std_logic; 
         wfi                : std_logic; 
-        jmp_stall          : std_logic; 
 
         -- Not pipelined into next stage 
         instr              : std_logic_vector(31 downto 0);
@@ -475,6 +502,7 @@ package rv32_pkg is
         rs2_dat            : std_logic_vector(31 downto 0);
         funct3             : std_logic_vector(2 downto 0); 
         rs2_adr            : std_logic_vector(4 downto 0); 
+        den : std_logic; 
     end record;
 
     -- Writeback Stage ---------------------------------------------------------
@@ -520,7 +548,6 @@ package rv32_pkg is
         m1_enable : std_logic;
         m2_enable : std_logic;
         wb_enable : std_logic;
-        f1_flush  : std_logic;
         f2_flush  : std_logic;
         id_flush  : std_logic;
         ex_flush  : std_logic;
