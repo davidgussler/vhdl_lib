@@ -10,6 +10,7 @@
 *.ip_user_files
 *.runs
 *.sim
+*.src
 
 vunit_out
 transcript
