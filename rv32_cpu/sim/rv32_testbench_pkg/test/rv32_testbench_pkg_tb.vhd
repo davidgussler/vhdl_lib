@@ -1,4 +1,5 @@
--- Simple run-thru of some of the instruction encoding fucntions
+-- Simple run-thru of some of the instruction encoding fucntions to test 
+-- compilation. 
 
 
 library ieee;
@@ -44,6 +45,5 @@ begin
 
         test_runner_cleanup(runner);
     end process;
-
 
 end architecture;

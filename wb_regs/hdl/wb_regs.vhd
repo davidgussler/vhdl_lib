@@ -1,41 +1,56 @@
 -- #############################################################################
--- # << Wishbone Register Bank >> #
--- *****************************************************************************
--- Copyright David N. Gussler 2022
--- *****************************************************************************
--- File     : wb_regs.vhd
--- Author   : David Gussler - davidnguss@gmail.com 
--- Language : VHDL '08
--- History  :  Date      | Version | Comments 
---            --------------------------------
---            09-23-2022 | 1.0     | Initial 
--- *****************************************************************************
--- Description : 
---    Generic Wishbone B4 Pipelined register banks
--- Generics
--- 
--- Formula to find minimum for G_NUM_ADR_BITS: clog2(G_NUM_REGS)+G_DAT_WIDTH_LOG2-3
--- Instead of calculating this internally to the module, this is a user generic 
--- in case the user wants to create an address space larger than the number of 
--- registers. This is so that the user can skip addresses and have more manual 
--- control if desired
--- REG_RESET_VAL will do nothing to RO_REG, only RW_REGS need to be reset 
--- G_REG_USED_BITS will optomize out unused RW flipflops. Does no optomization
--- on RO bits (because they arent actually registered)
--- Synthesizer will optomize out unused i_regs and o_regs indexes. Assuming a mix
--- of RO and RW type regs, not all i_regs, o_regs, o_rd_pulse, and o_wr_pulse signals
--- will be used due to the nature of how this module is organized. Some synthesizers
--- and simulators will givve warnings about this but it isn't an issue. 
-
-
--- assumes little endian accross the board 
--- assumes all accesses are aligned to G_DAT_WIDTH_LOG2
--- assumes byte granularity
-
+-- #  << Wishbone Register Bank >>
+-- # ===========================================================================
+-- # File     : wb_regs.vhd
+-- # Author   : David Gussler - david.gussler@proton.me
+-- # Language : VHDL '08
+-- # ===========================================================================
+-- # BSD 2-Clause License
+-- # 
+-- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # 
+-- # Redistribution and use in source and binary forms, with or without
+-- # modification, are permitted provided that the following conditions are met:
+-- # 
+-- # 1. Redistributions of source code must retain the above copyright notice,
+-- #     this list of conditions and the following disclaimer.
+-- # 
+-- # 2. Redistributions in binary form must reproduce the above copyright 
+-- #    notice, this list of conditions and the following disclaimer in the 
+-- #    documentation and/or other materials provided with the distribution.
+-- # 
+-- # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+-- # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+-- # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+-- # ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
+-- # LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+-- # CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+-- # SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+-- # INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+-- # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+-- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+-- #  POSSIBILITY OF SUCH DAMAGE.
+-- # ===========================================================================
+-- # Generic Wishbone B4 Pipelined register bank. This creates an array of
+-- # read-write / read-only registers along with the interfaces to access them 
+-- # on the user-logic side and the wishbone side. In other words, this creates 
+-- # a generic wishbone slave.
+-- #
+-- # Note about the IO of this module: 
+-- # Synthesizer will optomize out unused i_regs and o_regs indexes. Assuming a 
+-- # mix of RO and RW type regs, not all i_regs, o_regs, o_rd_pulse, and 
+-- # o_wr_pulse signals will be used due to the nature of how this module is 
+-- # organized. Some synthesizers and simulators will give warnings about this, 
+-- # but it isn't a real issue. 
+-- #
+-- # assumes little endian bit accesses accross the board 
+-- # assumes all accesses are aligned to G_DAT_WIDTH_L2
+-- # assumes byte granularity
+-- # 
 -- #############################################################################
 
 -- Consider adding another cycle in to possibly speed up timing
--- Make an external wishbone pipeline module 
+-- TODO: Actually do this instead: make an external wishbone pipeline module 
 
 -- TODO: add assertion checks at the bottom
 
@@ -46,13 +61,42 @@ use work.gen_utils_pkg.all;
 
 entity wb_regs is 
     generic(
+        -- Log-base-2 of the number of data bits. For example, a value of 5 for 
+        -- this generic will produce a data width of 32 because 2^5 = 32
         G_DAT_WIDTH_L2   : positive range 3 to 6 := 5;
+
+        -- Number of registers in the bank
         G_NUM_REGS       : positive := 32;
+
+        -- Number of address bits to allocate for this register bank. 
+        -- Formula to find the minimum value for for G_NUM_ADR_BITS: 
+        -- clog2(G_NUM_REGS)+G_DAT_WIDTH_LOG2-3. 
+        -- If the value used here is lower than the minumum, then the registers 
+        -- that fall outside of this region will be unaccessable. 
+        -- Instead of calculating this value inside the module, this is a generic 
+        -- in case the user wants an address space larger than the number of 
+        -- registers. This is so that the user can skip addresses and have
+        -- manual control over which register maps to which address.
         G_NUM_ADR_BITS   : positive := 7;
+
+        -- Address offset for each register in the array. 
         G_REG_ADR        : slv_array_t(G_NUM_REGS-1 downto 0)(G_NUM_ADR_BITS-1 downto 0);
+
+        -- Either RO_REG for read-only or RW_REG for read-write. read-only and 
+        -- read-write designations can only be made at the word-level as opposed
+        -- to the bit-level. This means that a RW register cannot contain RO bits
+        -- and vice versa. 
         G_REG_TYPE       : regtype_array_t(G_NUM_REGS-1 downto 0);
+
+        -- Reset value for all of the RW registers. RO registers do not have a 
+        -- reset value. 
         G_REG_RST_VAL    : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
+
+        -- Define the used bits for each of the registers. Unused bits will be 
+        -- optomized out and tied to a constant zero. 
         G_REG_USED_BITS  : slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
+
+        -- Enable warnings about generic values
         G_EN_ASSERT      : boolean := TRUE
     );
     port(
@@ -75,7 +119,7 @@ entity wb_regs is
         i_regs : in  slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
         o_regs : out slv_array_t(G_NUM_REGS-1 downto 0)((2 ** G_DAT_WIDTH_L2)-1 downto 0);
 
-        -- Register R/W Interface
+        -- Register R/W Indication Interface
         o_rd_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0);
         o_wr_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0)
 
@@ -116,7 +160,7 @@ begin
     -- Register Processes ------------------------------------------------------
     -- -------------------------------------------------------------------------
     -- Only use flip-flops on used bits. Hard-wire others to 0. 
-    gen_rw_regs_loop : for reg_idx in 0 to G_NUM_REGS-1 generate
+    lg_rw_regs_loop : for reg_idx in 0 to G_NUM_REGS-1 generate
         process (i_clk)
         begin
             if rising_edge(i_clk) then
@@ -130,7 +174,7 @@ begin
             end if;
         end process;
 
-        gen_rw_regs_if : if G_REG_TYPE(reg_idx) = RW_REG generate
+        ig_rw_regs_if : if (G_REG_TYPE(reg_idx) = RW_REG) generate
             process (i_clk)
             begin
                 if rising_edge(i_clk) then
@@ -144,9 +188,9 @@ begin
                 end if;
             end process;
 
-            gen_rw_bits_loop : for bit_idx in 0 to (2 ** G_DAT_WIDTH_L2)-1 generate
-                gen_rw_bits_if : if G_REG_USED_BITS(reg_idx)(bit_idx) = '1' generate
-                    prc_regs_out : process (i_clk) begin
+            lg_rw_bits_loop : for bit_idx in 0 to (2 ** G_DAT_WIDTH_L2)-1 generate
+                ig_rw_bits_if : if G_REG_USED_BITS(reg_idx)(bit_idx) = '1' generate
+                    sp_regs_out : process (i_clk) begin
                         if (rising_edge(i_clk)) then
                             if (i_rst) then
                                 o_regs(reg_idx)(bit_idx) <= G_REG_RST_VAL(reg_idx)(bit_idx);
@@ -171,7 +215,7 @@ begin
 
     -- WBS Process -------------------------------------------------------------
     -- -------------------------------------------------------------------------
-    prc_wbs : process (i_clk) begin
+    sp_wbs : process (i_clk) begin
         if (rising_edge(i_clk)) then
             if (i_rst = '1') then
                 o_wbs_dat <= (others=>'-');

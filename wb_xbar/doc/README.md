@@ -12,11 +12,11 @@
     are acked in order).
 * One cycle latency from master to slave
 * Multiple masters may access multiple slaves at the same time
-* Only ONE master may access a single slave at a time
+* Only ONE master may access a spacific slave at a time
 * Priority-based arbitration if many masters attempt to access a single slave
-* must support 100 percent thruput
+* shall support 100 percent best-case thruput
   * ie: must support one transaction per cycle
-* Limmit maximum number of outstanding transactions per cyc
+* Limit maximum number of outstanding transactions per cyc
   * Stall master if this limmit is reached
   
 ## Possible Upgrades
@@ -56,9 +56,9 @@ if request and grant are both low, then the master is idle
 there is not a situation where grant is high and request is low.
 
    * request gets granted if:
-       1. A master of higher priority has not been granted 
+      1. A master of higher priority has not been granted 
           access to the same slave  
-        1. the slave is not already occupied by any other master 
+      1. the slave is not already occupied by any other master 
    * if there is an ungranted request, then that master must be stalled 
 
 1. once the master has gotten its request thru to the slave, it is now up to the 
@@ -75,7 +75,7 @@ there is not a situation where grant is high and request is low.
 4. interconnect cannot change the grant for a given master while that master is
    still waiting on a response from a slave
 5. interconnect must generate an error if a slave doesnt respond within a given time window 
-6. interconnect must error if master tries to cahnge salves mid cycle 
+6. interconnect must error if master tries to change salves mid cycle 
 
 ## Exceptional Conditions
 
@@ -87,4 +87,17 @@ When is a bus error risen, and what happens during a bus error?
 
 xbar can respond to the master with an error code in the data bus 
 this error code must be 8-bits or less since that is the minumum wishbone data 
-bus width
+bus width. 
+
+## Thoughts on Bus Standards
+
+After learning more about AXI and AXI-Lite, I wish I had decided on 
+that standard for this project becasue it has a decicated response channel with 
+data about the error. While AXI-Lite is a bit more resource-intensive than 
+Wishbone, it's more widely used, more robust, compatible with Xilinx IP and 
+guarenteed to be synchronous. It's too late to switch now, but once I move on to 
+the next project, I'll plan on using AXI-Lite. Regular AXI has way more features 
+than I'd ever be able to make use of with my simple projects. I think AXI-Lite 
+is a good goldilocks that sits in between wishbone and AXI-Full. AHB and APB are
+a bit out of date and too simple for my use case, and Avalon is only really used 
+by Intel. 

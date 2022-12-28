@@ -1,21 +1,47 @@
 -- #############################################################################
--- #  -<< RISC-V Testbench Utilities >>-
+-- #  << RISC-V CPU Testbench Package >>
 -- # ===========================================================================
--- # File     : rv32_tb_pkg.vhd
--- # Author   : David Gussler - davidnguss@gmail.com 
+-- # File     : rv32_testbench_pkg.vhd
+-- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
--- # History  :  Date      | Version | Comments 
--- #            --------------------------------
--- #            11-03-2022 | 1.0     | Initial 
 -- # ===========================================================================
--- # RV32 TB functions
+-- # BSD 2-Clause License
+-- # 
+-- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # 
+-- # Redistribution and use in source and binary forms, with or without
+-- # modification, are permitted provided that the following conditions are met:
+-- # 
+-- # 1. Redistributions of source code must retain the above copyright notice,
+-- #     this list of conditions and the following disclaimer.
+-- # 
+-- # 2. Redistributions in binary form must reproduce the above copyright 
+-- #    notice, this list of conditions and the following disclaimer in the 
+-- #    documentation and/or other materials provided with the distribution.
+-- # 
+-- # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+-- # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+-- # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+-- # ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
+-- # LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+-- # CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+-- # SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+-- # INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+-- # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+-- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+-- #  POSSIBILITY OF SUCH DAMAGE.
+-- # ===========================================================================
+-- # RV32 TB functions. These functions are used in the testbench to build 
+-- # risc-v machine-code instructions, which are then loaded into simulated
+-- # memory for the processor to fetch. These can be thought of as instruction 
+-- # encoders. 
 -- #
 -- # Important note: 
 -- # Offsets are in multiples of 2 bytes for all branchs and jumps
 -- # for example jal(1, 8) would jump 8x2 bytes
 -- #
 -- # Makes use of function overloading to allow the user to feed inputs
--- # as either std_logic_vectors or integers
+-- # as either std_logic_vectors or integers.
 -- #
 -- #############################################################################
 

@@ -2,54 +2,38 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-
 entity debounce is
    generic (
-      N_CLKS : integer := 100; -- number of clocks to wait before declairing the input as stable
-      ACT_LVL : std_logic := '1' -- 1 for active high 
+      G_N_CLKS  : integer := 100; -- number of clocks to wait before deciding the input is stable
+      G_ACT_LVL : std_logic := '1' -- 1 for active high, 0 for active low
    );
    port (
-      i_clk   : in std_logic;
-      i_srst  : in std_logic;
+      i_clk : in std_logic;
+      i_rst : in std_logic;
 
-      i_button : in std_logic; 
-      o_debounced : out std_logic; 
+      i_in  : in std_logic; 
+      o_out : out std_logic
    );
 end entity;
 
 architecture rtl of debounce is
-   constant RST_LVL := not ACT_LVL; 
-   signal synced : std_logic;
-   signal count : integer range 0 to N_CLKS-1; 
-   signal debounced : std_logic := RST_LVL;
-begin
-   o_debounced <= debounced; 
-   
-   u_sync_bit : sync_bit 
-   generic map (
-      N_FLOPS => 2,
-      ACT_LVL => ACT_LVL
-   )
-   port map (
-      i_clk  => i_clk,
-      i_srst => i_srst,
-      i_bit  => i_button,
-      o_bit  => synced
-   );
+   constant RST_LVL : std_logic := not G_ACT_LVL; 
+   signal count : integer range 0 to G_N_CLKS-1; 
 
-   -- debounce process 
-   process (i_clk)
+begin
+
+   sp_debounce : process (i_clk)
    begin
       if rising_edge(i_clk) then
-         if (i_srst = '1') then
+         if (i_rst) then
             count <= 0;
-            debounced <= RST_LVL; 
+            o_out <= RST_LVL; 
          else
-            if (count < N_CLKS-1) then
+            if (count < G_N_CLKS-1) then
                count <= count + 1; 
-            elsif (synced /= debounced) then
-               counter <= 0;
-               debounced <= synced; 
+            elsif (i_in /= o_out) then
+               count <= 0;
+               o_out <= i_in; 
             end if; 
          end if;
       end if;

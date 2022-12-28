@@ -20,11 +20,9 @@ neorv32.add_source_files("./../golden_model/neorv32/rtl/core/neorv32_cpu_*.vhd")
 
 lib = vu.add_library("lib")
 lib.add_source_files("./../../../utils/hdl/gen_utils_pkg.vhd")
-lib.add_source_files("./../../../fifo/hdl/fifo.vhd")
 lib.add_source_files("./*.vhd")
 lib.add_source_files("./../rv32_testbench_pkg/*.vhd")
 lib.add_source_files("./../../hdl/rv32_pkg.vhd")
-lib.add_source_files("./../../hdl/rv32_fetch.vhd")
 lib.add_source_files("./../../hdl/rv32_cpu.vhd")
 
 

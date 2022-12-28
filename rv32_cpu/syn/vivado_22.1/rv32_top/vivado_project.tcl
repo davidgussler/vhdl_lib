@@ -1,20 +1,13 @@
 ################################################################################
-#  -<< Vivado Project >>-
-# ==============================================================================
-# Copyright 2022, David Gusser
-# ==============================================================================
 # File     : vivado_project.tcl
 # Author   : David Gussler - davidnguss@gmail.com 
 # Language : TCL
 # ==============================================================================
 # 1.) Creates a Vivado project from source
-# 2.) Builds the created project
 #
-# Cannot build unless it has already been created 
 #
 # Call this command from the directory in which this file resides: 
 #     vivado -mode batch -source vivado_project.tcl
-#
 #
 ################################################################################
 
@@ -36,5 +29,5 @@ set_property target_language VHDL [current_project]
 set_property simulator_language Mixed [current_project]
 set_property file_type {VHDL 2008} [get_files -filter {FILE_TYPE == VHDL}]
 
-# Update to set top and file compile order
+# Update to set top file and compile order
 update_compile_order -fileset sources_1

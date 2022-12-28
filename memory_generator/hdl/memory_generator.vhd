@@ -1,29 +1,46 @@
 -- #############################################################################
--- #  -<< Memory Generator >>-
--- # ===========================================================================
--- # Copyright 2022, David Gusser
+-- #  << Memory Generator >>
 -- # ===========================================================================
 -- # File     : memory_generator.vhd
--- # Author   : David Gussler - davidnguss@gmail.com 
+-- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
+-- # BSD 2-Clause License
+-- # 
+-- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # 
+-- # Redistribution and use in source and binary forms, with or without
+-- # modification, are permitted provided that the following conditions are met:
+-- # 
+-- # 1. Redistributions of source code must retain the above copyright notice,
+-- #     this list of conditions and the following disclaimer.
+-- # 
+-- # 2. Redistributions in binary form must reproduce the above copyright 
+-- #    notice, this list of conditions and the following disclaimer in the 
+-- #    documentation and/or other materials provided with the distribution.
+-- # 
+-- # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+-- # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+-- # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+-- # ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
+-- # LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+-- # CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+-- # SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+-- # INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+-- # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+-- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+-- #  POSSIBILITY OF SUCH DAMAGE.
+-- # ===========================================================================
 -- # A highly configurable FPGA memory block. Has only been tested for Xilinx 
--- # devices, but it should work with any vendor's device. See example folder 
--- # for uses. 
+-- # devices, but it *should* be vendor agnostic. See examples folder for uses.
 -- # 
 -- #############################################################################
 
--- Libraries -------------------------------------------------------------------
--- -----------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
 use work.gen_utils_pkg.all;
 
-
--- Entity ======================================================================
--- =============================================================================
 entity memory_generator is 
     generic(
         -- Number of "bytes" per memory word; Each "byte" can be exclusivly 
@@ -104,8 +121,6 @@ entity memory_generator is
 end entity;
 
 
--- Architecture ================================================================
--- =============================================================================
 architecture rtl of memory_generator is 
     -- Constants 
     constant DATA_WIDTH : integer := G_BYTES_PER_ROW * G_BYTE_WIDTH;
@@ -122,22 +137,22 @@ architecture rtl of memory_generator is
     shared variable ram : slv_array_t(0 to 2**G_DEPTH_L2-1)(DATA_WIDTH-1 downto 0) := G_MEM_INIT;
 
 
-    -- Synthesis Attributes ------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
+    -- Synthesis Attributes ----------------------------------------------------
+    -- -------------------------------------------------------------------------
     -- Viavado 
     attribute ram_style : string;
     attribute ram_style of ram : variable is G_MEM_STYLE;
 
 begin
 
-    -- Port A ======================================================================================
-    -- =============================================================================================
+    -- Port A ==================================================================
+    -- =========================================================================
 
     -- Assignments
     a_idx <= to_integer(unsigned(i_a_addr));
 
-    -- Writes --------------------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
+    -- Writes ------------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     sp_a_write : process (i_a_clk)
     begin
         if rising_edge(i_a_clk) then 
@@ -153,15 +168,15 @@ begin
     end process;
 
 
-    -- Asynchronous Reads --------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
-    ig_a_async_read : if G_A_RD_LATENCY = 0 generate 
+    -- Asynchronous Reads ------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    ig_a_async_read : if (G_A_RD_LATENCY = 0) generate 
         o_a_rdat <= ram(a_idx); 
     end generate;
 
 
-    -- No Change Reads -----------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
+    -- No Change Reads ---------------------------------------------------------
+    -- -------------------------------------------------------------------------
     ig_a_no_change : if (G_A_RD_MODE = 0) generate
 
         -- Synchronous Reads 
@@ -199,10 +214,8 @@ begin
     end generate;
 
 
-
-
-    -- Read First Reads ----------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
+    -- Read First Reads --------------------------------------------------------
+    -- -------------------------------------------------------------------------
     ig_a_read_first : if (G_A_RD_MODE = 1) generate
 
         -- Synchronous Reads 
@@ -244,14 +257,14 @@ begin
 
 
 
-    -- Port B ======================================================================================
-    -- =============================================================================================
+    -- Port B ==================================================================
+    -- =========================================================================
 
     -- Assignments
     b_idx <= to_integer(unsigned(i_b_addr));
 
-    -- Writes --------------------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
+    -- Writes ------------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     sp_b_write : process (i_b_clk)
     begin
         if rising_edge(i_b_clk) then 
@@ -267,15 +280,15 @@ begin
     end process;
 
 
-    -- Asynchronous Reads --------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
-    ig_b_async_read : if G_B_RD_LATENCY = 0 generate 
+    -- Asynchronous Reads ------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    ig_b_async_read : if (G_B_RD_LATENCY = 0) generate 
         o_b_rdat <= ram(b_idx); 
     end generate;
 
 
-    -- No Change Reads -----------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
+    -- No Change Reads ---------------------------------------------------------
+    -- -------------------------------------------------------------------------
     ig_b_no_change : if (G_B_RD_MODE = 0) generate
 
         -- Synchronous Reads 
@@ -314,8 +327,8 @@ begin
     end generate;
 
 
-    -- Read First Reads ----------------------------------------------------------------------------
-    -- ---------------------------------------------------------------------------------------------
+    -- Read First Reads --------------------------------------------------------
+    -- -------------------------------------------------------------------------
     ig_b_read_first : if (G_B_RD_MODE = 1) generate
 
         -- Synchronous Reads 
@@ -352,6 +365,5 @@ begin
             o_b_rdat <= dat_pipe(G_B_RD_LATENCY-1); 
         end generate;
     end generate;  
-
 
 end architecture;

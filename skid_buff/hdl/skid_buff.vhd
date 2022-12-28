@@ -1,35 +1,46 @@
 -- #############################################################################
--- # << Skid Buffer >> #
--- *****************************************************************************
--- Copyright David N. Gussler 2022
--- *****************************************************************************
--- File     : skid_buff.vhd
--- Author   : David Gussler - davidnguss@gmail.com 
--- Language : VHDL '08
--- History  :  Date      | Version | Comments 
---            --------------------------------
---            09-29-2022 | 1.0     | Initial 
--- *****************************************************************************
--- Description : 
---    Skid Buffer with optional output registers. o_ready will always be
---    registered. Using this module with G_REG_OUTS=0 will incur zero latency
---    and register o_ready. Using this module with G_REG_OUTS=1 will incur 
---    one cycle of latency, but add a full pipeline "slice." 
---    This module can be inserted into the critical path of a valid/ready 
---    handshake protocal to pipeline the logic while maintaining 100 percent 
---    thruput.
---
---    Source that explains the theory:
---    https://zipcpu.com/blog/2019/05/22/skidbuffer.html
---
--- Generics
---   G_WIDTH    : positive := 32
---     Data width 
---   G_REG_OUTS : boolean := FALSE
---     Register outputs; With this disabled, only o_ready is registered
---     With this enabled, o_valid and o_data are also registered (useful for 
---     pipelining longer paths), but the data will take an extra clockcycle
---     to reach its destination.
+-- #  << Skid Buffer >>
+-- # ===========================================================================
+-- # File     : skid_buff.vhd
+-- # Author   : David Gussler - david.gussler@proton.me
+-- # Language : VHDL '08
+-- # ===========================================================================
+-- # BSD 2-Clause License
+-- # 
+-- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # 
+-- # Redistribution and use in source and binary forms, with or without
+-- # modification, are permitted provided that the following conditions are met:
+-- # 
+-- # 1. Redistributions of source code must retain the above copyright notice,
+-- #     this list of conditions and the following disclaimer.
+-- # 
+-- # 2. Redistributions in binary form must reproduce the above copyright 
+-- #    notice, this list of conditions and the following disclaimer in the 
+-- #    documentation and/or other materials provided with the distribution.
+-- # 
+-- # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+-- # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+-- # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+-- # ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
+-- # LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+-- # CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+-- # SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+-- # INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+-- # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+-- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+-- #  POSSIBILITY OF SUCH DAMAGE.
+-- # ===========================================================================
+-- # Skid Buffer with optional output registers. o_ready will always be
+-- # registered. Using this module with G_REG_OUTS=0 will incur zero latency
+-- # and register o_ready. Using this module with G_REG_OUTS=1 will incur 
+-- # one cycle of latency, but add a full pipeline "slice." 
+-- # This module can be inserted into the critical path of a valid/ready 
+-- # handshake protocal to pipeline the logic while maintaining 100 percent 
+-- # thruput.
+-- #
+-- # Source: https://zipcpu.com/blog/2019/05/22/skidbuffer.html
+-- # 
 -- #############################################################################
 
 library ieee;
@@ -38,7 +49,13 @@ use ieee.numeric_std.all;
 
 entity skid_buff is 
     generic(
+        -- Data width 
         G_WIDTH    : positive := 32;
+
+        -- Register outputs; With this disabled, only o_ready is registered
+        -- With this enabled, o_valid and o_data are also registered (useful for 
+        -- pipelining longer paths), but the data will take an extra clockcycle
+        -- to reach its destination.
         G_REG_OUTS : boolean  := FALSE
     );
     port(
@@ -71,19 +88,13 @@ architecture rtl of skid_buff is
     signal m_sending_s_stalled : std_logic;
 
 begin
-    -- Async -------------------------------------------------------------------
-    -- -------------------------------------------------------------------------
-    odata <= r_idata when r_valid else i_data;
+    odata  <= r_idata when r_valid else i_data;
     ovalid <= i_valid or r_valid;
 
-    slave_not_stalled <= '1' when (not ovalid or i_ready) else '0';
-    m_sending_s_stalled <= '1' when 
-        (i_valid and o_ready) and (ovalid and not i_ready)
-        else '0';
+    slave_not_stalled   <= not ovalid or i_ready;
+    m_sending_s_stalled <= (i_valid and o_ready) and (ovalid and not i_ready);
 
-    -- Sync --------------------------------------------------------------------
-    -- -------------------------------------------------------------------------
-    process (i_clk)
+    sp_valid_ready : process (i_clk)
     begin
         if rising_edge(i_clk) then
             if (i_rst) then
@@ -103,7 +114,7 @@ begin
         end if;
     end process;
 
-    process (i_clk)
+    sp_data_reg : process (i_clk)
     begin
         if rising_edge(i_clk) then
             if (m_sending_s_stalled) then
@@ -121,32 +132,24 @@ begin
     -- This expression: "not (ovalid = '1' and i_ready = '0')"
     -- is logically equivilant to this one:
     -- (ovalid = '0' or i_ready = '1')
-    gen_reg_outs_true : if G_REG_OUTS = TRUE generate
-        process (i_clk)
+    ig_reg_outs_true : if (G_REG_OUTS = TRUE) generate
+        sp_reg_outs : process (i_clk)
         begin
             if rising_edge(i_clk) then
                 if (i_rst) then
                     o_valid <= '0';
+                    o_data  <= (others=>'-');
                 elsif (slave_not_stalled) then
                     o_valid <= ovalid;
+                    o_data  <= odata;
                 end if;
             end if; 
         end process;
-
-        process (i_clk)
-        begin
-            if rising_edge(i_clk) then
-                if (slave_not_stalled) then
-                    o_data <= odata;
-                end if;
-            end if;
-        end process;
-
     end generate;
 
-    gen_reg_outs_false : if G_REG_OUTS = FALSE generate
-        o_data <= odata;
+    ig_reg_outs_false : if (G_REG_OUTS = FALSE) generate
         o_valid <= ovalid; 
+        o_data  <= odata;
     end generate;
 
 end rtl;

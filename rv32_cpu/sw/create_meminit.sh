@@ -5,7 +5,7 @@
 #
 # Script to convert a hex memory textfile to a vhdl meminit package file.
 # Useage:
-#   ./create_meminit.sh <./input_file.txt> <./output_file.vhd> <memory_size_words>
+#   ./create_meminit.sh <input_file.txt> <output_file.vhd> <memory_size_words>
 #
 # If the size of the init file is greater than the memory size, then the extra 
 # locations in the input file will be truncated. If the input file file is smaller

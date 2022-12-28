@@ -1,13 +1,38 @@
 -- #############################################################################
--- #  -<< RISC-V CPU Package File >>-
--- # ===========================================================================
--- # Copyright 2022, David Gusser
+-- #  << RISC-V CPU Package File >>
 -- # ===========================================================================
 -- # File     : rv32_pkg.vhd
 -- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
+-- # BSD 2-Clause License
 -- # 
+-- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # 
+-- # Redistribution and use in source and binary forms, with or without
+-- # modification, are permitted provided that the following conditions are met:
+-- # 
+-- # 1. Redistributions of source code must retain the above copyright notice,
+-- #     this list of conditions and the following disclaimer.
+-- # 
+-- # 2. Redistributions in binary form must reproduce the above copyright 
+-- #    notice, this list of conditions and the following disclaimer in the 
+-- #    documentation and/or other materials provided with the distribution.
+-- # 
+-- # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+-- # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+-- # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+-- # ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
+-- # LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+-- # CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+-- # SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+-- # INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+-- # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+-- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+-- #  POSSIBILITY OF SUCH DAMAGE.
+-- # ===========================================================================
+-- #
+-- #
 -- #############################################################################
 
 library ieee;
@@ -339,20 +364,23 @@ package rv32_pkg is
     -- -------------------------------------------------------------------------
     type pc_t is record
         -- Pipelined into next stage 
-        pc   : std_logic_vector(31 downto 0);  
-        trap : trap_t;
-        jump_addr  : std_logic_vector(31 downto 0);  
-        jump : std_logic; 
-        jump_latch_addr : std_logic_vector(31 downto 0);  
-        jump_latch : std_logic; 
+        pc          : std_logic_vector(31 downto 0);  
+        jump_addr   : std_logic_vector(31 downto 0);  
+        jump        : std_logic; 
 
         -- Not pipelined into next stage 
-        dly_mip_msi        : std_logic; 
-        dly_mip_mti        : std_logic; 
-        dly_mip_mei        : std_logic; 
-        trap_taken         : std_logic;
-        pc_fw_mepc         : std_logic_vector(31 downto 2);  
-        pc_fw_mtvec        : std_logic_vector(31 downto 2);  
+        dly_mip_msi : std_logic; 
+        dly_mip_mti : std_logic; 
+        dly_mip_mei : std_logic; 
+        ms_pulse    : std_logic; 
+        mt_pulse    : std_logic; 
+        me_pulse    : std_logic; 
+        ms_latch    : std_logic; 
+        mt_latch    : std_logic; 
+        me_latch    : std_logic; 
+        trap_taken  : std_logic;
+        pc_fw_mepc  : std_logic_vector(31 downto 2);  
+        pc_fw_mtvec : std_logic_vector(31 downto 2);  
     end record;
 
     -- Instruction Fetch Request Stage -----------------------------------------
@@ -372,15 +400,10 @@ package rv32_pkg is
         valid : std_logic;
         instr : std_logic_vector(31 downto 0);
         trap  : trap_t;
-        asdf : std_logic;
-        i_ierror_reg: std_logic;
-        i_iack_reg: std_logic;
-        i_irdat_reg: std_logic_vector(31 downto 0);
-
-        flush_dly : std_logic; 
 
         -- Not pipelined into next stage 
         iren : std_logic; 
+        flush_dly : std_logic; 
     end record;
 
  
@@ -388,77 +411,76 @@ package rv32_pkg is
     -- -------------------------------------------------------------------------
     type id_t is record 
         -- Pipelined into next stage 
-        pc                 : std_logic_vector(31 downto 0);
-        valid       : std_logic; 
-        trap : trap_t; 
-        ctrl               : ctrl_t;
-        rs1_adr            : std_logic_vector(4 downto 0);
-        rs2_adr            : std_logic_vector(4 downto 0);
-        rdst_adr           : std_logic_vector(4 downto 0);
-        rs1_dat            : std_logic_vector(31 downto 0);
-        rs2_dat            : std_logic_vector(31 downto 0);
-        imm32              : std_logic_vector(31 downto 0);
-        funct3             : std_logic_vector(2 downto 0);
-        funct7             : std_logic_vector(6 downto 0);
-        csr_access         : std_logic; 
-        mret               : std_logic; 
-        wfi                : std_logic; 
+        pc            : std_logic_vector(31 downto 0);
+        valid         : std_logic; 
+        trap          : trap_t; 
+        ctrl          : ctrl_t;
+        rs1_adr       : std_logic_vector(4 downto 0);
+        rs2_adr       : std_logic_vector(4 downto 0);
+        rdst_adr      : std_logic_vector(4 downto 0);
+        rs1_dat       : std_logic_vector(31 downto 0);
+        rs2_dat       : std_logic_vector(31 downto 0);
+        imm32         : std_logic_vector(31 downto 0);
+        funct3        : std_logic_vector(2 downto 0);
+        funct7        : std_logic_vector(6 downto 0);
+        csr_access    : std_logic; 
+        mret          : std_logic; 
+        wfi           : std_logic; 
 
         -- Not pipelined into next stage 
-        instr              : std_logic_vector(31 downto 0);
-        irdat              : std_logic_vector(31 downto 0);
-        last_instr         : std_logic_vector(31 downto 0);
-        last_dec_en        : std_logic; 
-        regfile            : slv_array_t(0 to 31)(31 downto 0);
-        opcode             : std_logic_vector(6 downto 0);
-        id_fw_rs1_dat     : std_logic_vector(31 downto 0);
-        id_fw_rs2_dat     : std_logic_vector(31 downto 0);
-        br_eq              : std_logic; 
-        br_ltu             : std_logic; 
-        br_lt              : std_logic; 
-        branch             : std_logic; 
-        br_taken           : std_logic; 
-        brt_adr            : std_logic_vector(31 downto 0); 
-
-        fence              : std_logic; 
-        fencei             : std_logic; 
+        instr         : std_logic_vector(31 downto 0);
+        irdat         : std_logic_vector(31 downto 0);
+        last_instr    : std_logic_vector(31 downto 0);
+        last_dec_en   : std_logic; 
+        regfile       : slv_array_t(0 to 31)(31 downto 0);
+        opcode        : std_logic_vector(6 downto 0);
+        id_fw_rs1_dat : std_logic_vector(31 downto 0);
+        id_fw_rs2_dat : std_logic_vector(31 downto 0);
+        br_eq         : std_logic; 
+        br_ltu        : std_logic; 
+        br_lt         : std_logic; 
+        branch        : std_logic; 
+        br_taken      : std_logic; 
+        brt_adr       : std_logic_vector(31 downto 0); 
+        fence         : std_logic; 
+        fencei        : std_logic; 
     end record;
  
     -- Execute Stage -------------------------------------------------------------
     -- -------------------------------------------------------------------------
     type ex_t is record    
         -- Pipelined into next stage 
-        valid       : std_logic;
-        pc                 : std_logic_vector(31 downto 0); 
-        ctrl               : ctrl_t;
-        rs2_adr            : std_logic_vector(4 downto 0);  
-        rdst_adr           : std_logic_vector(4 downto 0);  
-        rs2_dat            : std_logic_vector(31 downto 0);
-        funct3             : std_logic_vector(2 downto 0);
-        exe_rslt           : std_logic_vector(31 downto 0);
-        csr_access         : std_logic;
-        csr_adr            : std_logic_vector(11 downto 0);
-        csr_wdata          : std_logic_vector(31 downto 0);
-        trap : trap_t;
+        valid          : std_logic;
+        pc             : std_logic_vector(31 downto 0); 
+        ctrl           : ctrl_t;
+        rs2_adr        : std_logic_vector(4 downto 0);  
+        rdst_adr       : std_logic_vector(4 downto 0);  
+        rs2_dat        : std_logic_vector(31 downto 0);
+        funct3         : std_logic_vector(2 downto 0);
+        exe_rslt       : std_logic_vector(31 downto 0);
+        csr_access     : std_logic;
+        csr_adr        : std_logic_vector(11 downto 0);
+        csr_wdata      : std_logic_vector(31 downto 0);
+        trap           : trap_t;
 
         -- Not pipelined into next stage 
-        any_trap           : std_logic;
-        rs1_adr            : std_logic_vector(4 downto 0);  
-        alu_rslt           : std_logic_vector(31 downto 0);
-        aluop              : std_logic_vector(3 downto 0);
-        ex_fw_rs1_dat     : std_logic_vector(31 downto 0);
-        ex_fw_rs2_dat     : std_logic_vector(31 downto 0);
-        imm32              : std_logic_vector(31 downto 0);
-        rs1_dat            : std_logic_vector(31 downto 0);
-        funct7             : std_logic_vector(6 downto 0);
-        alua_dat           : std_logic_vector(31 downto 0);
-        alub_dat           : std_logic_vector(31 downto 0);
-        csr_rdata          : std_logic_vector(31 downto 0);
-        csr                : csr_t; 
-        mret               : std_logic;
-        is_rtype           : std_logic;
-        wfi                : std_logic; 
-        ex_fw_csr_rdat     : std_logic_vector(31 downto 0);
+        any_trap       : std_logic;
+        rs1_adr        : std_logic_vector(4 downto 0);  
+        alu_rslt       : std_logic_vector(31 downto 0);
+        aluop          : std_logic_vector(3 downto 0);
+        ex_fw_rs1_dat  : std_logic_vector(31 downto 0);
+        ex_fw_rs2_dat  : std_logic_vector(31 downto 0);
+        imm32          : std_logic_vector(31 downto 0);
+        rs1_dat        : std_logic_vector(31 downto 0);
+        funct7         : std_logic_vector(6 downto 0);
+        alua_dat       : std_logic_vector(31 downto 0);
+        alub_dat       : std_logic_vector(31 downto 0);
+        csr_rdata      : std_logic_vector(31 downto 0);
+        csr            : csr_t; 
+        mret           : std_logic;
+        is_rtype       : std_logic;
+        wfi            : std_logic; 
+        ex_fw_csr_rdat : std_logic_vector(31 downto 0);
 
     end record;
  
@@ -466,49 +488,46 @@ package rv32_pkg is
     -- -------------------------------------------------------------------------
     type m1_t is record    
         -- Pipelined into next stage 
-        valid       : std_logic;
-        pc                 : std_logic_vector(31 downto 0);
-        ctrl               : ctrl_t;
-        rdst_adr           : std_logic_vector(4 downto 0);
-        exe_rslt           : std_logic_vector(31 downto 0);
-        csr_access         : std_logic;
-        csr_adr            : std_logic_vector(11 downto 0);
-        csr_wdata          : std_logic_vector(31 downto 0);
-        trap               : trap_t;
-        m1_fw_rs2_dat      : std_logic_vector(31 downto 0);
+        valid         : std_logic;
+        pc            : std_logic_vector(31 downto 0);
+        ctrl          : ctrl_t;
+        rdst_adr      : std_logic_vector(4 downto 0);
+        exe_rslt      : std_logic_vector(31 downto 0);
+        csr_access    : std_logic;
+        csr_adr       : std_logic_vector(11 downto 0);
+        csr_wdata     : std_logic_vector(31 downto 0);
+        trap          : trap_t;
         
         -- Not pipelined into next stage 
-        rs2_dat            : std_logic_vector(31 downto 0);
-        funct3             : std_logic_vector(2 downto 0); 
-        rs2_adr            : std_logic_vector(4 downto 0); 
+        rs2_dat       : std_logic_vector(31 downto 0);
+        m1_fw_rs2_dat : std_logic_vector(31 downto 0);
+        funct3        : std_logic_vector(2 downto 0); 
+        rs2_adr       : std_logic_vector(4 downto 0); 
     end record;
 
     -- Memory Response Stage ------------------------------------------------------------
     -- -------------------------------------------------------------------------
     type m2_t is record    
         -- Pipelined into next stage 
-        valid       : std_logic;
-        pc                 : std_logic_vector(31 downto 0);
-        ctrl               : ctrl_t;
-        rdst_adr           : std_logic_vector(4 downto 0);
-        exe_rslt           : std_logic_vector(31 downto 0);
-        csr_access         : std_logic;
-        csr_adr            : std_logic_vector(11 downto 0);
-        csr_wdata          : std_logic_vector(31 downto 0);
-        drdat              : std_logic_vector(31 downto 0);
-        trap               : trap_t;
-        
+        valid      : std_logic;
+        pc         : std_logic_vector(31 downto 0);
+        ctrl       : ctrl_t;
+        rdst_adr   : std_logic_vector(4 downto 0);
+        exe_rslt   : std_logic_vector(31 downto 0);
+        csr_access : std_logic;
+        csr_adr    : std_logic_vector(11 downto 0);
+        csr_wdata  : std_logic_vector(31 downto 0);
+        drdat      : std_logic_vector(31 downto 0);
+        funct3     : std_logic_vector(2 downto 0); 
+
         -- Not pipelined into next stage 
-        rs2_dat            : std_logic_vector(31 downto 0);
-        funct3             : std_logic_vector(2 downto 0); 
-        rs2_adr            : std_logic_vector(4 downto 0); 
-        den : std_logic; 
+        trap       : trap_t;
     end record;
 
     -- Writeback Stage ---------------------------------------------------------
     -- -------------------------------------------------------------------------
     type wb_t is record   
-        valid : std_logic;
+        valid        : std_logic;
         pc4          : std_logic_vector(31 downto 0); 
         ctrl         : ctrl_t;
         rdst_adr     : std_logic_vector(4 downto 0);  
@@ -516,29 +535,31 @@ package rv32_pkg is
         rdst_dat     : std_logic_vector(31 downto 0);  
         memrd_dat    : std_logic_vector(31 downto 0); 
         funct3       : std_logic_vector(2 downto 0); 
-        csr_access         : std_logic;
-        csr_adr            : std_logic_vector(11 downto 0);
-        csr_wdata          : std_logic_vector(31 downto 0);
-        drdat              : std_logic_vector(31 downto 0);
+        csr_access   : std_logic;
+        csr_adr      : std_logic_vector(11 downto 0);
+        csr_wdata    : std_logic_vector(31 downto 0);
+        drdat        : std_logic_vector(31 downto 0);
     end record;
     
     -- Hazard Unit -------------------------------------------------------------
     -- -------------------------------------------------------------------------
     type hz_t is record         
         -- Hazards 
-        id_ex_br_hazard   : std_logic;
-        id_ex_jalr_hazard : std_logic;
-        id_m1_br_hazard   : std_logic;
-        id_m1_jalr_hazard : std_logic;
-        id_m2_br_hazard   : std_logic;
-        id_m2_jalr_hazard : std_logic;
-        ex_m1_csr_hazard  : std_logic;
-        ex_m1_alu_hazard  : std_logic;
-        ex_m2_csr_hazard  : std_logic;
-        ex_m2_alu_hazard  : std_logic;
-        ex_m1_ls_hazard   : std_logic;
-        imem_hazard       : std_logic;
-        dmem_hazard       : std_logic;
+        id_ex_br_hazard    : std_logic;
+        id_ex_jalr_hazard  : std_logic;
+        id_m1_br_hazard    : std_logic;
+        id_m1_jalr_hazard  : std_logic;
+        id_m2_br_hazard    : std_logic;
+        id_m2_jalr_hazard  : std_logic;
+        ex_m1_csr_hazard   : std_logic;
+        ex_m1_alu_hazard   : std_logic;
+        ex_m2_csr_hazard   : std_logic;
+        ex_m2_alu_hazard   : std_logic;
+        ex_m1_ls_hazard    : std_logic;
+        instr_req_outstand : std_logic;
+        data_req_outstand : std_logic;
+        imem_hazard        : std_logic;
+        dmem_hazard        : std_logic;
 
         -- Piepline register control signals
         f1_enable : std_logic;
@@ -605,12 +626,6 @@ package rv32_pkg is
     constant JTYPE : std_logic_vector(2 downto 0) := "100";
     constant RTYPE : std_logic_vector(2 downto 0) := "101";
     --
-    -- Forwarding mux select signals 
-    constant NO_FW  : std_logic_vector(1 downto 0) := "00";
-    constant M1_FW  : std_logic_vector(1 downto 0) := "01";
-    constant M2_FW  : std_logic_vector(1 downto 0) := "01";
-    constant WB_FW  : std_logic_vector(1 downto 0) := "11";
-
     constant NOP_INSTR : std_logic_vector(31 downto 0) := 
             x"000" & b"00000" & b"00000" & F3_SUBADD & OPCODE_ALUI;
 

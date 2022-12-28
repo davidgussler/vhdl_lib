@@ -1,5 +1,5 @@
 ## Introduction
-This is a basic Synchronous FIFO module 
+This is a basic synchronous FIFO module 
 
 ## Requirements
 * Shall implement full, empty, almost full, and almost empty flags 
@@ -8,6 +8,4 @@ This is a basic Synchronous FIFO module
 * Reading an empty fifo shall return 0
 * Writing to a full fifo shall do nothing 
 * Shall allow concurrent reads and writes
-* Shall have variable read latency
-
-## Design
+* Shall have variable memory latency options
