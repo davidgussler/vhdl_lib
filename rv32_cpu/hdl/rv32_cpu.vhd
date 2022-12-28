@@ -186,7 +186,6 @@ begin
                      ex.trap.instr_adr_ma or ex.trap.instr_access; 
 
 
-
     -- Forwarding Muxes
     -- TODO: Double-check risc V spec about weather or not to ignore the last two bits here
     ap_pc_fw_sel : process (all) 
@@ -451,7 +450,7 @@ begin
                 id.ctrl.mem_wr   <= '0';
                 id.ctrl.mem_rd   <= '0';
                 id.ctrl.alu_ctrl <= '-';  
-                id.ctrl.alua_sel <= b"--";   
+                id.ctrl.alua_sel <= b"--";
                 id.ctrl.alub_sel <= '-'; 
                 id.ctrl.jal      <= '1';
                 id.ctrl.jalr     <= '0';
