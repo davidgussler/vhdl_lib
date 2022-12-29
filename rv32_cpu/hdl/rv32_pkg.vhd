@@ -389,7 +389,6 @@ package rv32_pkg is
         -- Pipelined into next stage 
         pc   : std_logic_vector(31 downto 0);  
         trap : trap_t;
-        iren : std_logic; 
     end record;
 
     -- Instruction Fetch Response Stage ----------------------------------------
@@ -402,7 +401,6 @@ package rv32_pkg is
         trap  : trap_t;
 
         -- Not pipelined into next stage 
-        iren : std_logic; 
         flush_dly : std_logic; 
     end record;
 

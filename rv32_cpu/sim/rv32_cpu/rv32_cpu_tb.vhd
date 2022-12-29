@@ -41,6 +41,8 @@ use ieee.numeric_std.all;
 library vunit_lib;
 context vunit_lib.vunit_context;
 context vunit_lib.vc_context;
+library osvvm;
+use osvvm.RandomPkg.all;
 use work.gen_utils_pkg.all;
 use work.rv32_pkg.all;
 use work.rv32_testbench_pkg.all;
@@ -453,18 +455,92 @@ architecture tb of rv32_cpu_tb is
     );
 
 
-    -- Generate a random sequence of instructions
-    -- TODO: 
-    constant RANDOM_TEST : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0) := (
-        rv_addi(10, 0, 223),
+    -- Used to generate a random sequence of instructions --
+    -- Length of our instruction list
+    constant LIST_LENGTH : positive := 38;
 
-        rv_jal (0, 0),
-
-        others => (others=>'0')
+    -- Constrains the instructions output by our random instruction generator 
+    -- to the instructions listed here. We are avoiding CSRs and other privilidged
+    -- instructions because this CPU differs from the golden model for these. 
+    constant INSTR_LIST : instrs_array_t(0 to LIST_LENGTH-1) := (
+        ENUM_LUI   ,
+        ENUM_AUIPC ,
+        ENUM_JAL   ,
+        ENUM_JALR  ,
+        ENUM_BEQ   ,
+        ENUM_BNE   ,
+        ENUM_BLT   ,
+        ENUM_BGE   ,
+        ENUM_BGEU  ,
+        ENUM_LB    ,
+        ENUM_LH    ,
+        ENUM_LW    ,
+        ENUM_LBU   ,
+        ENUM_LHU   ,
+        ENUM_SB    ,
+        ENUM_SH    ,
+        ENUM_SW    ,
+        ENUM_ADDI  ,
+        ENUM_SLTI  ,
+        ENUM_SLTUI ,
+        ENUM_XORI  ,
+        ENUM_ORI   ,
+        ENUM_ANDI  ,
+        ENUM_SLLI  ,
+        ENUM_SRLI  ,
+        ENUM_SRAI  ,
+        ENUM_ADD   ,
+        ENUM_SUB   ,
+        ENUM_SLL   ,
+        ENUM_SLT   ,
+        ENUM_SLTU  ,
+        ENUM_XOR   ,
+        ENUM_SRL   ,
+        ENUM_SRA   ,
+        ENUM_OR    ,
+        ENUM_AND   ,
+        ENUM_FENCE ,
+        ENUM_FENCEI
     );
 
+    -- Used to generate a random sequence of instructions --
+    -- Length of our instruction list
+    constant LIST_LENGTH_CONSTRAINED : positive := 29;
 
-    -- TODO: Re-run all tests, but inject random data and instruction memory stalls
+    -- Constrains the instructions output by our random instruction generator 
+    -- to the instructions listed here. We are avoiding CSRs and other privilidged
+    -- instructions because this CPU differs from the golden model for these. 
+    constant INSTR_LIST_CONSTRAINED : instrs_array_t(0 to LIST_LENGTH_CONSTRAINED-1) := (
+        ENUM_LUI   ,
+        ENUM_AUIPC ,
+        ENUM_LB    ,
+        ENUM_LH    ,
+        ENUM_LW    ,
+        ENUM_LBU   ,
+        ENUM_LHU   ,
+        ENUM_SB    ,
+        ENUM_SH    ,
+        ENUM_SW    ,
+        ENUM_ADDI  ,
+        ENUM_SLTI  ,
+        ENUM_SLTUI ,
+        ENUM_XORI  ,
+        ENUM_ORI   ,
+        ENUM_ANDI  ,
+        ENUM_SLLI  ,
+        ENUM_SRLI  ,
+        ENUM_SRAI  ,
+        ENUM_ADD   ,
+        ENUM_SUB   ,
+        ENUM_SLL   ,
+        ENUM_SLT   ,
+        ENUM_SLTU  ,
+        ENUM_XOR   ,
+        ENUM_SRL   ,
+        ENUM_SRA   ,
+        ENUM_OR    ,
+        ENUM_AND
+    );
 
 
     -- Memory Procedures -------------------------------------------------------
@@ -503,6 +579,8 @@ begin
     -- Main TB Process ---------------------------------------------------------
     -- -------------------------------------------------------------------------
     main : process
+        variable rnd : RandomPType; -- For OSVVM Random Package
+        variable v_rnd_instr_list : slv_array_t(0 to MEM_DEPTH-1)(31 downto 0); -- random instruction list
     begin
         test_runner_setup(runner, runner_cfg);
         while test_suite loop
@@ -658,23 +736,63 @@ begin
                 info("Stall-Hazard Test Success!");
 
 
+            -- This test is total chaos right now and needs to be further 
+            -- constrained before it can be considered useful. Need to add constraints
+            -- on which regions are allowed to be jumped to so we dont jump to an
+            -- out of bounds region.  Also need to constrain aligned memory 
+            -- accesses
             elsif run("random") then
+                info("Generating random instruction sequence...");
+                for i in 0 to MEM_DEPTH-2 loop
+                    rv_random(rnd, LIST_LENGTH, INSTR_LIST, 0, 5, 0, 100, 0, 100, v_rnd_instr_list(i));  
+                end loop;
+                
+                -- This will probably never actually be reached. It could also 
+                -- be overwritten for all I know.. Like I said before. This test 
+                -- is a little too crazy at the moment... but still a fun experiment! 
+                v_rnd_instr_list(1023) := rv_jal(0, 0); 
+
                 info("Loading random instruction sequence into memories...");
-                mem_init(memory_dut, RANDOM_TEST); 
-                mem_init(memory_golden, RANDOM_TEST); 
+                mem_init(memory_dut, v_rnd_instr_list); 
+                mem_init(memory_golden, v_rnd_instr_list); 
 
                 info("Resetting DUT and model...");
                 wait until rising_edge(clk);
                 
                 info("Runing test program...");
                 rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
-                wait for 500 * CLK_PERIOD;
+                wait for 5000 * CLK_PERIOD;
 
                 info("Checking results...");
                 mem_check(memory_dut, memory_golden);
 
                 info("Random Instrunction Sequence Test Success!");
 
+
+            -- This test is also too crazy and not really useful. 
+            elsif run("random_constrained") then
+                info("Generating random instruction sequence...");
+                for i in 0 to MEM_DEPTH-2 loop
+                    rv_random(rnd, LIST_LENGTH_CONSTRAINED, INSTR_LIST_CONSTRAINED, 0, 5, -100, 100, -100, 100, v_rnd_instr_list(i));  
+                end loop;
+                
+                v_rnd_instr_list(1023) := rv_jal(0, 0); 
+
+                info("Loading random instruction sequence into memories...");
+                mem_init(memory_dut, v_rnd_instr_list); 
+                mem_init(memory_golden, v_rnd_instr_list); 
+
+                info("Resetting DUT and model...");
+                wait until rising_edge(clk);
+                
+                info("Runing test program...");
+                rst <= '1', '0' after 16 * CLK_PERIOD + CLK_TO_Q;
+                wait for 5000 * CLK_PERIOD;
+
+                info("Checking results...");
+                mem_check(memory_dut, memory_golden);
+
+                info("Random Constrained Instrunction Sequence Test Success!");
 
             end if;
         end loop;
@@ -844,7 +962,6 @@ begin
             dut.irdat <= v_dat;
         else 
             dut.iack <= '0';
-            dut.irdat <= (others=>'X');
         end if; 
     end process;
 
@@ -855,8 +972,6 @@ begin
         if (drack_dly) then 
             v_dat := read_word(memory_dut, to_integer(unsigned(dadr_dly(ADDR_WIDTH-1 downto 0))), 4);
             dut.drdat <= v_dat;
-        else 
-            dut.drdat <= (others=>'X');
         end if; 
     end process;
 

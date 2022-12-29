@@ -52,6 +52,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.rv32_pkg.all;
+library osvvm;
+use osvvm.RandomPkg.all;
 
 
 -- Package Header ==============================================================
@@ -66,6 +68,18 @@ package rv32_testbench_pkg is
     subtype imm12_t is std_logic_vector(11 downto 0);
     subtype imm20_t is std_logic_vector(19 downto 0);
 
+    -- Enumeration of all the instructions. This is used to select the list of 
+    -- possible instructions in random instruction generator
+    type instrs_t is (ENUM_LUI, ENUM_AUIPC, ENUM_JAL, ENUM_JALR, ENUM_BEQ, 
+        ENUM_BNE, ENUM_BLT, ENUM_BGE, ENUM_BGEU, ENUM_LB, ENUM_LH, ENUM_LW, 
+        ENUM_LBU, ENUM_LHU, ENUM_SB, ENUM_SH, ENUM_SW, ENUM_ADDI, ENUM_SLTI,
+        ENUM_SLTUI, ENUM_XORI, ENUM_ORI, ENUM_ANDI, ENUM_SLLI, ENUM_SRLI, 
+        ENUM_SRAI, ENUM_ADD, ENUM_SUB, ENUM_SLL, ENUM_SLT, ENUM_SLTU, ENUM_XOR, 
+        ENUM_SRL, ENUM_SRA, ENUM_OR, ENUM_AND, ENUM_FENCE, ENUM_FENCEI, 
+        ENUM_ECALL, ENUM_EBREAK, ENUM_CSRRW, ENUM_CSRRS, ENUM_CSRRC,
+        ENUM_CSRRWI, ENUM_CSRRSI, ENUM_CSRRCI, ENUM_WFI, ENUM_MRET);
+
+    type instrs_array_t is array (natural range <>) of instrs_t;
 
     -- Type Conversion Functions -----------------------------------------------
     -- -------------------------------------------------------------------------
@@ -73,6 +87,21 @@ package rv32_testbench_pkg is
     function u12 (int : natural) return std_logic_vector;
     function s12 (int : integer) return std_logic_vector;
     function s20 (int : integer) return std_logic_vector;
+
+    -- Random Functions --------------------------------------------------------
+    -- -------------------------------------------------------------------------
+    -- Generates a random instruction with random data in the fields
+    procedure rv_random (
+        variable rnd             : inout RandomPType;
+        constant length          : in    positive; 
+        constant instr_list      : in    instrs_array_t;
+        constant reg_range_min   : in    integer range 0 to 2**5-1;
+        constant reg_range_max   : in    integer range 0 to 2**5-1;
+        constant imm12_range_min : in    integer range -2**11 to 2**11-1;
+        constant imm12_range_max : in    integer range -2**11 to 2**12-1;
+        constant imm20_range_min : in    integer range -2**19 to 2**19-1;
+        constant imm20_range_max : in    integer range -2**19 to 2**19-1;
+        variable v_instr         : out   instr32_t);
         
 
     -- Instruction Encoding Functions ------------------------------------------
@@ -282,6 +311,91 @@ package body rv32_testbench_pkg is
     begin
         return(sint2slv(int, 20));
     end function;
+
+
+    -- Random Instruction ======================================================
+    -- =========================================================================
+    procedure rv_random (
+        variable rnd             : inout RandomPType;
+        constant length          : in    positive; 
+        constant instr_list      : in    instrs_array_t;
+        constant reg_range_min   : in    integer range 0 to 2**5-1;
+        constant reg_range_max   : in    integer range 0 to 2**5-1;
+        constant imm12_range_min : in    integer range -2**11 to 2**11-1;
+        constant imm12_range_max : in    integer range -2**11 to 2**12-1;
+        constant imm20_range_min : in    integer range -2**19 to 2**19-1;
+        constant imm20_range_max : in    integer range -2**19 to 2**19-1;
+        variable v_instr         : out   instr32_t)
+    is
+        variable v_instr_sel : instrs_t;
+        variable v_reg_adr0  : reg_adr_t;
+        variable v_reg_adr1  : reg_adr_t;
+        variable v_reg_adr2  : reg_adr_t;
+        variable v_imm12     : imm12_t;
+        variable v_imm20     : imm20_t;
+
+    begin
+
+        v_instr_sel := instr_list(rnd.RandInt(0, length-1));
+        v_reg_adr0  := std_logic_vector(rnd.RandUnsigned(reg_range_min, reg_range_max, 5));
+        v_reg_adr1  := std_logic_vector(rnd.RandUnsigned(reg_range_min, reg_range_max, 5));
+        v_reg_adr2  := std_logic_vector(rnd.RandUnsigned(reg_range_min, reg_range_max, 5));
+        v_imm12     := std_logic_vector(rnd.RandSigned(imm12_range_min, imm12_range_max, 12));
+        v_imm20     := std_logic_vector(rnd.RandSigned(imm20_range_min, imm20_range_max, 20));
+
+        case v_instr_sel is
+            when ENUM_LUI    => v_instr := rv_lui(v_reg_adr0, v_imm20);
+            when ENUM_AUIPC  => v_instr := rv_auipc(v_reg_adr0, v_imm20);
+            when ENUM_JAL    => v_instr := rv_jal(v_reg_adr0, v_imm20); 
+            when ENUM_JALR   => v_instr := rv_jalr(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_BEQ    => v_instr := rv_beq(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_BNE    => v_instr := rv_bne(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_BLT    => v_instr := rv_blt(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_BGE    => v_instr := rv_bge(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_BGEU   => v_instr := rv_bgeu(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_LB     => v_instr := rv_lb(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_LH     => v_instr := rv_lh(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_LW     => v_instr := rv_lw(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_LBU    => v_instr := rv_lbu(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_LHU    => v_instr := rv_lhu(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_SB     => v_instr := rv_sb(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_SH     => v_instr := rv_sh(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_SW     => v_instr := rv_sw(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_ADDI   => v_instr := rv_addi(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_SLTI   => v_instr := rv_slti(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_SLTUI  => v_instr := rv_sltui(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_XORI   => v_instr := rv_xori(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_ORI    => v_instr := rv_ori(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_ANDI   => v_instr := rv_andi(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_SLLI   => v_instr := rv_slli(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SRLI   => v_instr := rv_srli(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SRAI   => v_instr := rv_srai(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_ADD    => v_instr := rv_add(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SUB    => v_instr := rv_sub(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SLL    => v_instr := rv_sll(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SLT    => v_instr := rv_slt(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SLTU   => v_instr := rv_sltu(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_XOR    => v_instr := rv_xor(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SRL    => v_instr := rv_srl(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_SRA    => v_instr := rv_sra(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_OR     => v_instr := rv_or(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_AND    => v_instr := rv_and(v_reg_adr0, v_reg_adr1, v_reg_adr2);
+            when ENUM_FENCE  => v_instr := rv_fence;
+            when ENUM_FENCEI => v_instr := rv_fencei;
+            when ENUM_ECALL  => v_instr := rv_ecall;
+            when ENUM_EBREAK => v_instr := rv_ebreak;
+            when ENUM_CSRRW  => v_instr := rv_csrrw(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_CSRRS  => v_instr := rv_csrrs(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_CSRRC  => v_instr := rv_csrrc(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_CSRRWI => v_instr := rv_csrrwi(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_CSRRSI => v_instr := rv_csrrsi(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_CSRRCI => v_instr := rv_csrrci(v_reg_adr0, v_reg_adr1, v_imm12);
+            when ENUM_WFI    => v_instr := rv_wfi;
+            when ENUM_MRET   => v_instr := rv_mret;
+            when others      => v_instr := (others=>'0');
+        end case;
+
+    end procedure;
 
 
 

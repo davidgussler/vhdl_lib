@@ -36,12 +36,7 @@
 -- #############################################################################
 
 -- TODO: 
--- run tests with and without memory stalls 
--- add random instruction generator 
--- make sure there's a test for changing the mtvec
--- trial synthesis
--- change headers to my new email & bsd license
--- update memory module and connect 
+-- update memory module and connect everything up
 -- synthesis 
 -- start compiling real code and testing with that
 

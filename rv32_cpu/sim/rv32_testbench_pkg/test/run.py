@@ -15,6 +15,7 @@ lib = vu.add_library("lib")
 lib.add_source_files("*.vhd")
 lib.add_source_files("../*.vhd")
 lib.add_source_files("../../../hdl/rv32_pkg.vhd")
+lib.add_source_files("../../../../utils/hdl/gen_utils_pkg.vhd")
 
 # Run vunit function
 vu.main()
