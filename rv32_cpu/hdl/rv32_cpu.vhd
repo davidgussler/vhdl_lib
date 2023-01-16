@@ -7,7 +7,7 @@
 -- # ===========================================================================
 -- # BSD 2-Clause License
 -- # 
--- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # Copyright (c) 2023, David Gussler. All rights reserved.
 -- # 
 -- # Redistribution and use in source and binary forms, with or without
 -- # modification, are permitted provided that the following conditions are met:
@@ -64,7 +64,7 @@ entity rv32_cpu is
         o_fencei    : out std_logic;
         i_irdat     : in  std_logic_vector(31 downto 0);
         i_iack      : in  std_logic; 
-        i_ierr    : in  std_logic;
+        i_ierr      : in  std_logic;
 
         -- Data Interface 
         o_dren      : out std_logic;
@@ -75,7 +75,7 @@ entity rv32_cpu is
         o_fence     : out std_logic;
         i_drdat     : in  std_logic_vector(31 downto 0);
         i_dack      : in  std_logic; 
-        i_derr    : in  std_logic;
+        i_derr      : in  std_logic;
 
         -- Interrupts
         i_ms_irq   : in  std_logic; 
