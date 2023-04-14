@@ -18,7 +18,7 @@
 if [[ $# -lt 3 ]]; then
     echo "Error: Not enough input arguments"
     echo 
-    echo "Useage: $0 <./input_file.txt> <./output_file.vhd> <memory_depth_words>"
+    echo "Useage: $0 <./input_file.txt> <./output_file.vhd> <memory_depth_words> <MEM_INIT_NAME>"
     echo
     exit 1
 fi
@@ -27,21 +27,20 @@ fi
 input_file=$1
 output_file=$2
 depth=$3
+mem_const_name=$4
 date_time=$(date)
 
 # VHDL Header and start of file variable
 read -r -d '' start_of_file << EOM
 -- #############################################################################
--- #  -<< Memory Init Package >>-
--- # ===========================================================================
--- # Copyright 2022, David Gusser
+-- #  << CPU Memory Initialization Package >>
 -- # ===========================================================================
 -- # File     : $output_file
 -- # Language : VHDL '08
 -- # ===========================================================================
+-- # DO NOT MODIFY
 -- # This file was generated using the tool: $0
 -- # Generated on: $date_time
--- #
 -- #############################################################################
 
 library ieee;
@@ -51,7 +50,7 @@ use work.gen_utils_pkg.all;
 
 package ${output_file%%.*}_pkg is 
 
-constant C_REG_ADR : slv_array_t(0 to $depth-1)(31 downto 0) := (
+constant $mem_const_name : slv_array_t(0 to $depth-1)(31 downto 0) := (
 EOM
 
 

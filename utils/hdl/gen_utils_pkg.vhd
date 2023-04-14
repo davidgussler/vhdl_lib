@@ -51,6 +51,8 @@ package gen_utils_pkg is
     type regtype_t is (RW_REG, RO_REG);
     type regtype_array_t is array (natural range <>) of regtype_t;
 
+    type uart_parity_t is (NO_PARITY, EVEN_PARITY, ODD_PARITY); 
+
 
     -- Functions ===============================================================
     -- =========================================================================

@@ -44,8 +44,8 @@ entity fifo is
    generic (
       G_WIDTH     : positive := 32; 
       G_DEPTH_L2  : positive := 11; -- true depth = 2^G_DEPTH_L2 - 1
-      G_MEM_STYLE : string  := "auto";
-      G_FALLTHRU  : boolean := FALSE
+      G_MEM_STYLE : string   := "auto";
+      G_FALLTHRU  : boolean  := FALSE
    );
    port (
       -- Clock & Reset
