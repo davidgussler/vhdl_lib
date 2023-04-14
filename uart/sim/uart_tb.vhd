@@ -66,13 +66,14 @@ architecture tb of uart_tb is
 
     -- DUT Generics / Signals
     constant BAUD_RATE : positive := 115200; 
-    constant DATA_BITS : positive := 8;
-    constant PARITY    : uart_parity_t := EVEN_PARITY; 
+    constant DATA_WIDTH : positive := 8;
+    constant PARITY    : integer := 0; 
+    constant PARITY_EO  : std_logic := '0'; 
 
-    signal rx_axis_tdata : std_logic_vector(DATA_BITS-1 downto 0);
+    signal rx_axis_tdata : std_logic_vector(DATA_WIDTH-1 downto 0);
     signal rx_axis_tvalid : std_logic;
     signal rx_axis_tready : std_logic;
-    signal tx_axis_tdata : std_logic_vector(DATA_BITS-1 downto 0);
+    signal tx_axis_tdata : std_logic_vector(DATA_WIDTH-1 downto 0);
     signal tx_axis_tvalid : std_logic;
     signal tx_axis_tready : std_logic;
     signal uart_rx : std_logic;
@@ -83,11 +84,11 @@ architecture tb of uart_tb is
 
     -- BFMs
     constant axis_tx_bfm_cfg : axi_stream_master_t := new_axi_stream_master(
-        data_length => DATA_BITS
+        data_length => DATA_WIDTH
     );
 
     constant axis_rx_bfm_cfg : axi_stream_slave_t := new_axi_stream_slave(
-        data_length => DATA_BITS
+        data_length => DATA_WIDTH
     );
 
     constant uart_tx_bfm_cfg : uart_master_t := new_uart_master(
@@ -98,7 +99,7 @@ architecture tb of uart_tb is
     constant uart_rx_bfm_cfg : uart_slave_t := new_uart_slave(
         initial_baud_rate => BAUD_RATE,
         idle_state => '1',
-        data_length => DATA_BITS
+        data_length => DATA_WIDTH
     );
     
 
@@ -146,7 +147,7 @@ begin
         for xact_num in 1 to NUM_XACTIONS loop
             push_axi_stream(
                 net, axis_tx_bfm_cfg, 
-                tdata => std_logic_vector(to_unsigned(xact_num, DATA_BITS))
+                tdata => std_logic_vector(to_unsigned(xact_num, DATA_WIDTH))
             );
         end loop;
     
@@ -169,8 +170,9 @@ begin
     generic map (
         G_CLK_FREQ_HZ => CLK_FREQ_HZ,
         G_BAUD_RATE   => BAUD_RATE,
-        G_DATA_BITS   => DATA_BITS,
-        G_PARITY      => PARITY
+        G_DATA_WIDTH   => DATA_WIDTH,
+        G_PARITY      => PARITY,
+        G_PARITY_EO  => PARITY_EO
     )
     port map (
         i_clk => clk,
