@@ -80,7 +80,7 @@ entity uart is
         -- Status
         o_parity_err : out std_logic;
         o_frame_err  : out std_logic;
-        o_missed_rx_err : out std_logic
+        o_dropped_rx_err : out std_logic
     );
 end entity;
 
@@ -100,7 +100,7 @@ architecture rtl of uart is
     signal tx_buf : std_logic_vector(BUF_WIDTH-1 downto 0); 
     signal tx_baud_pulse : std_logic; 
     signal tx_baud_clk_cnt : integer range CLKS_PER_BAUD-1 downto 0; 
-    signal tx_buf_idx : integer range BUF_WIDTH-1 downto 0; 
+    signal tx_buf_idx : integer range BUF_WIDTH downto 0; 
     signal tx_parity : std_logic_vector(G_DATA_WIDTH downto 0); 
 
     type rx_state_t is (S_RX_IDLE, S_RX_START, S_RX_DATA);
@@ -191,14 +191,14 @@ begin
                     end if; 
 
                 when S_TX_DATA =>
-                    if (tx_buf_idx >= BUF_WIDTH-1) then 
-                        tx_state <= S_TX_IDLE; 
+                    if (tx_buf_idx >= BUF_WIDTH) then 
+                        tx_state <= S_TX_IDLE;
                         tx_buf_idx <= 0;
-                    elsif (tx_baud_pulse) then
+                    elsif (tx_baud_pulse) then 
                         o_uart_tx  <= tx_buf(tx_buf_idx); 
                         tx_buf_idx <= tx_buf_idx + 1;
                     end if; 
-
+                    
                 when others =>
                     null;
                 end case;
@@ -215,7 +215,7 @@ begin
 
     rx_parity(0) <= G_PARITY_EO;
     rx_parity_logic: for i in 0 to G_DATA_WIDTH-1 generate
-        rx_parity(i+1) <= rx_parity(i) xor rx_buf(i);
+        rx_parity(i+1) <= rx_parity(i) xor rx_buf(i+1);
     end generate;
                       
     -- RX AXIS and error logic 
@@ -227,21 +227,22 @@ begin
                 o_m_axis_tdata <= (others=>'0'); -- TODO: does not need to be reset
                 o_parity_err <= '0'; 
                 o_frame_err <= '0'; 
-                o_missed_rx_err <= '0'; 
+                o_dropped_rx_err <= '0'; 
             else
                 o_parity_err <= '0'; 
                 o_frame_err <= '0'; 
-                o_missed_rx_err <= '0'; 
+                o_dropped_rx_err <= '0'; 
 
                 if (new_rx_dat_pulse) then
                     if (o_m_axis_tvalid) then 
                         -- We missed data becasue the receiver fsm got new data 
                         -- before the axi channel had received the valid last data.
-                        o_missed_rx_err <= '1'; 
+                        o_dropped_rx_err <= '1'; 
                     else 
                         o_m_axis_tvalid <= '1';
-                        o_m_axis_tdata <= rx_buf(G_DATA_WIDTH-1 downto 1);
+                        o_m_axis_tdata <= rx_buf(G_DATA_WIDTH downto 1);
 
+                        -- if start bit is hi or stop bit is low
                         o_frame_err <= rx_buf(0) or not rx_buf(BUF_WIDTH-1);
 
                         if (G_PARITY = 0) then 
@@ -283,7 +284,7 @@ begin
                         end if; 
 
                     when S_RX_START =>
-                        if (rx_os_pulse_cnt < G_OS_RATE/2-1) then -- minus 1 since we alread got one in the idle state
+                        if (rx_os_pulse_cnt < G_OS_RATE/2-1) then
                             rx_os_pulse_cnt <= rx_os_pulse_cnt + 1; 
                         else 
                             -- half-way thru start bit 
@@ -298,8 +299,8 @@ begin
                             rx_os_pulse_cnt <= rx_os_pulse_cnt + 1; 
                         else 
                             rx_os_pulse_cnt <= 0; 
-                            if (rx_buf_idx < BUF_WIDTH) then 
-                                rx_buf(rx_buf_idx) <= i_uart_rx; 
+                            rx_buf(rx_buf_idx) <= i_uart_rx; 
+                            if (rx_buf_idx < BUF_WIDTH-1) then 
                                 rx_buf_idx <= rx_buf_idx + 1; 
                             else 
                                 new_rx_dat_pulse <= '1';

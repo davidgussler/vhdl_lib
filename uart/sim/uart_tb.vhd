@@ -72,7 +72,7 @@ architecture tb of uart_tb is
 
     signal rx_axis_tdata : std_logic_vector(DATA_WIDTH-1 downto 0);
     signal rx_axis_tvalid : std_logic;
-    signal rx_axis_tready : std_logic;
+    signal rx_axis_tready : std_logic := '1';
     signal tx_axis_tdata : std_logic_vector(DATA_WIDTH-1 downto 0);
     signal tx_axis_tvalid : std_logic;
     signal tx_axis_tready : std_logic;
@@ -80,6 +80,7 @@ architecture tb of uart_tb is
     signal uart_tx : std_logic;
     signal parity_err : std_logic;
     signal frame_err : std_logic;
+    signal dropped_rx_err : std_logic; 
 
 
     -- BFMs
@@ -95,6 +96,7 @@ architecture tb of uart_tb is
         initial_baud_rate => BAUD_RATE,
         idle_state => '1'
     );
+    constant uart_master_stream : stream_master_t := as_stream(uart_tx_bfm_cfg);
 
     constant uart_rx_bfm_cfg : uart_slave_t := new_uart_slave(
         initial_baud_rate => BAUD_RATE,
@@ -149,9 +151,13 @@ begin
                 net, axis_tx_bfm_cfg, 
                 tdata => std_logic_vector(to_unsigned(xact_num, DATA_WIDTH))
             );
+            push_stream(
+                net, uart_master_stream, 
+                std_logic_vector(to_unsigned(xact_num, DATA_WIDTH))
+            );
         end loop;
     
-        info("Stream sent!");
+        info("Streams sent!");
     
         wait until rising_edge(clk);
         done <= true;
@@ -187,7 +193,8 @@ begin
         i_uart_rx       => uart_rx,
         o_uart_tx       => uart_tx,
         o_parity_err    => parity_err,
-        o_frame_err     => frame_err
+        o_frame_err     => frame_err,
+        o_dropped_rx_err => dropped_rx_err
     );
 
 
@@ -218,14 +225,13 @@ begin
     --     tdata        => rx_axis_tdata
     -- );
 
-    -- TODO: 
-    -- uart_master_bfm : entity vunit_lib.uart_master
-    -- generic map (
-    --     uart => uart_tx_bfm_cfg
-    -- )
-    -- port map (
-    --     tx => uart_rx
-    -- );
+    uart_master_bfm : entity vunit_lib.uart_master
+    generic map (
+        uart => uart_tx_bfm_cfg
+    )
+    port map (
+        tx => uart_rx
+    );
 
     -- u_uart_slave_bfm : entity vunit_lib.uart_slave
     -- generic map (
