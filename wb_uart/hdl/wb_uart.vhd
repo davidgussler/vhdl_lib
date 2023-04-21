@@ -92,7 +92,8 @@ architecture rtl of wb_uart is
     signal intr_en          : std_logic;
     signal tx_fifo_wr_pulse : std_logic;
     signal rx_fifo_rd_pulse : std_logic;
-    signal clear_err_pulse : std_logic;
+    signal clear_err_pulse  : std_logic;
+    signal rx_fifo_valid    : std_logic; 
 
     signal overrun_err_lat  : std_logic;
     signal frame_err_lat    : std_logic;
@@ -106,6 +107,17 @@ architecture rtl of wb_uart is
     signal tx_axis_tready : std_logic;
 
 begin
+    process (i_clk)
+    begin
+        if rising_edge(i_clk) then
+            if (i_rst) then
+                o_uart_irq <= '0'; 
+            else 
+                o_uart_irq <= en_intr and (rx_fifo_valid or tx_fifo_empty); 
+            end if; 
+        end if;
+    end process;
+
 
     u_wb_uart_regs : entity work.wb_uart_regs
     generic map (
@@ -127,7 +139,7 @@ begin
         o_wbs_dat => o_wbs_dat,
 
         i_rx_fifo_data     => rx_fifo_data,
-        i_rx_fifo_valid    => not rx_fifo_empty,
+        i_rx_fifo_valid    => rx_fifo_valid,
         i_rx_fifo_full     => rx_fifo_full,
         i_tx_fifo_empty    => tx_fifo_empty,
         i_tx_fifo_full     => tx_fifo_full,
@@ -240,7 +252,7 @@ begin
         o_dat   => rx_fifo_data,
         o_empty => rx_fifo_empty
     );
-
+    rx_fifo_valid <= not rx_fifo_empty; 
 
 
     -- Interrupt latching / clearing
