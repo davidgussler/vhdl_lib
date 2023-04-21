@@ -43,7 +43,7 @@ use work.gen_utils_pkg.all;
 
 entity wb_uart_regs is
     generic (
-        G_DATA_BITS   : positive range 5 to 8 := 8
+        G_DATA_WIDTH   : positive range 5 to 8 := 8
     );
     port (
         i_clk : in std_logic;
@@ -52,7 +52,7 @@ entity wb_uart_regs is
         -- Wishbone Slave Interface
         i_wbs_cyc : in  std_logic;
         i_wbs_stb : in  std_logic;
-        i_wbs_adr : in  std_logic_vector(31 downto 0);
+        i_wbs_adr : in  std_logic_vector(3 downto 0);
         i_wbs_wen : in  std_logic;
         i_wbs_sel : in  std_logic_vector(3 downto 0);
         i_wbs_dat : in  std_logic_vector(31 downto 0);
@@ -62,21 +62,22 @@ entity wb_uart_regs is
         o_wbs_dat : out std_logic_vector(31 downto 0);
 
         -- Register Breakout
-        i_rx_fifo_data     : in  std_logic_vector(G_DATA_BITS-1 downto 0);
+        i_rx_fifo_data     : in  std_logic_vector(G_DATA_WIDTH-1 downto 0);
         i_rx_fifo_valid    : in  std_logic;
         i_rx_fifo_full     : in  std_logic;
         i_tx_fifo_empty    : in  std_logic;
         i_tx_fifo_full     : in  std_logic;
-        i_en_intr          : in  std_logic;
+        i_intr_en          : in  std_logic;
         i_overrun_err      : in  std_logic;
         i_frame_err        : in  std_logic;
         i_parity_err       : in  std_logic;
-        o_tx_fifo_data     : out std_logic_vector(G_DATA_BITS-1 downto 0);
+        o_tx_fifo_data     : out std_logic_vector(G_DATA_WIDTH-1 downto 0);
         o_rst_tx_fifo      : out std_logic;
         o_rst_rx_fifo      : out std_logic;
         o_en_intr          : out std_logic;
         o_tx_fifo_wr_pulse : out std_logic;
-        o_rx_fifo_rd_pulse : out std_logic
+        o_rx_fifo_rd_pulse : out std_logic;
+        o_clear_err_pulse  : out std_logic
     );
 end entity;
 
@@ -94,7 +95,7 @@ architecture rtl of wb_uart_regs is
 
     -- Register Bit-fields -----------------------------------------------------
     -- -------------------------------------------------------------------------
-    subtype  FIFO_FLD is natural range G_DATA_BITS-1 downto 0;
+    subtype  FIFO_FLD is natural range G_DATA_WIDTH-1 downto 0;
     constant STS_RX_FIFO_DATA_VALID : integer := 0;
     constant STS_RX_FIFO_FULL       : integer := 1;
     constant STS_TX_FIFO_EMPTY      : integer := 2;
@@ -113,16 +114,16 @@ architecture rtl of wb_uart_regs is
     -- -------------------------------------------------------------------------
     constant DAT_WIDTH_L2 : positive := 5;
     constant NUM_REGS     : positive := 4;
-    constant NUM_ADR_BITS : positive := 2;
+    constant NUM_ADR_BITS : positive := 4;
     constant EN_ASSERT    : boolean  := TRUE;
 
     constant REG_ADR :
         slv_array_t(NUM_REGS-1 downto 0)(NUM_ADR_BITS-1 downto 0) :=
     (
-        RX_FIFO => X"00",
-        TX_FIFO => X"04",
-        STS_REG => X"08",
-        ctl_REG => X"0C"
+        RX_FIFO => X"0",
+        TX_FIFO => X"4",
+        STS_REG => X"8",
+        ctl_REG => X"C"
     );
 
     constant REG_TYPE : 
@@ -198,19 +199,23 @@ begin
 
     -- Signal breakout ---------------------------------------------------------
     -- -------------------------------------------------------------------------
-    regs_in(RX_FIFO)(FIFO_FLD)               <= i_rx_fifo_data;
-    regs_in(STS_REG)(STS_RX_FIFO_DATA_VALID) <= i_rx_fifo_valid;
-    regs_in(STS_REG)(STS_RX_FIFO_FULL      ) <= i_rx_fifo_full;
-    regs_in(STS_REG)(STS_TX_FIFO_EMPTY     ) <= i_tx_fifo_empty;
-    regs_in(STS_REG)(STS_TX_FIFO_FULL      ) <= i_tx_fifo_full;
-    regs_in(STS_REG)(STS_INTR_ENABLED      ) <= i_en_intr;
-    regs_in(STS_REG)(STS_OVERRUN_ERR       ) <= i_overrun_err;
-    regs_in(STS_REG)(STS_FRAME_ERR         ) <= i_frame_err;
-    regs_in(STS_REG)(STS_PARITY_ERR        ) <= i_parity_err;
+    regs_sts(RX_FIFO)(FIFO_FLD)               <= i_rx_fifo_data;
+    regs_sts(STS_REG)(STS_RX_FIFO_DATA_VALID) <= i_rx_fifo_valid;
+    regs_sts(STS_REG)(STS_RX_FIFO_FULL      ) <= i_rx_fifo_full;
+    regs_sts(STS_REG)(STS_TX_FIFO_EMPTY     ) <= i_tx_fifo_empty;
+    regs_sts(STS_REG)(STS_TX_FIFO_FULL      ) <= i_tx_fifo_full;
+    regs_sts(STS_REG)(STS_INTR_ENABLED      ) <= i_intr_en;
+    regs_sts(STS_REG)(STS_OVERRUN_ERR       ) <= i_overrun_err;
+    regs_sts(STS_REG)(STS_FRAME_ERR         ) <= i_frame_err;
+    regs_sts(STS_REG)(STS_PARITY_ERR        ) <= i_parity_err;
 
-    o_tx_fifo_data <= regs_out(RX_FIFO)(FIFO_FLD);
-    o_rst_tx_fifo  <= regs_out(CTRL_REG)(CTL_RST_TX_FIFO);
-    o_rst_rx_fifo  <= regs_out(CTRL_REG)(CTL_RST_RX_FIFO);
-    o_en_intr      <= regs_out(CTRL_REG)(CTL_ENABLE_INTR);
+    o_tx_fifo_data <= regs_ctl(TX_FIFO)(FIFO_FLD);
+    o_rst_tx_fifo  <= regs_ctl(CTL_REG)(CTL_RST_TX_FIFO);
+    o_rst_rx_fifo  <= regs_ctl(CTL_REG)(CTL_RST_RX_FIFO);
+    o_en_intr      <= regs_ctl(CTL_REG)(CTL_ENABLE_INTR);
+
+    o_tx_fifo_wr_pulse <= wr_pulse(TX_FIFO);
+    o_rx_fifo_rd_pulse <= rd_pulse(RX_FIFO);
+    o_clear_err_pulse <= rd_pulse(STS_REG);
 
 end architecture;

@@ -13,20 +13,19 @@ use ieee.numeric_std.all;
 
 entity sync_bit is
    generic (
-      N_FLOPS : integer range 2 to 5 := 2;
-      ACT_LVL : std_logic := '1'; -- 1 for active high, 0 for active low
+      G_N_FLOPS : integer range 2 to 5 := 2;
+      G_RST_VAL : std_logic := '0'
    );
    port (
-      i_clk : in std_logic;
-      i_srst : in std_logic;
-      i_bit : in std_logic;
-      o_bit : out std_logic;
+      i_clk : in  std_logic;
+      i_rst : in  std_logic;
+      i_async : in  std_logic;
+      o_sync : out std_logic
    );
 end entity;
 
 architecture rtl of sync_bit is
-   constant RST_LVL := not ACT_LVL; 
-   signal sync_regs : std_logic_vector(N_FLOPS-1 downto 0) := (others=>RST_LVL);
+   signal sync_regs : std_logic_vector(G_N_FLOPS-1 downto 0);
 
    -- Vivado Synthesis Attributes --
    -- tells synthesizer that these are synchronizing registers
@@ -38,19 +37,16 @@ architecture rtl of sync_bit is
    attribute SHREG_EXTRACT : string;
    attribute SHREG_EXTRACT of sync_regs : signal is "NO";
 begin
-   o_bit <= sync_regs(N_FLOPS-1);
+   o_sync <= sync_regs(0);
 
    -- sync flops
    process (i_clk)
    begin
       if rising_edge(i_clk) then
-         if (i_srst = '1') then
-            sync_regs <= (others=>RST_LVL); 
-         else
-            sync_regs(0) <= i_bit; 
-            for i in 1 to N_FLOPS-1 loop
-               sync_regs(i) <= sync_regs(i - 1);
-            end loop;
+         if (i_rst = '1') then
+            sync_regs <= (others=>G_RST_VAL); 
+         else 
+            sync_regs <= i_async & sync_regs(G_N_FLOPS-1 downto 1);
          end if;
       end if; 
    end process;
