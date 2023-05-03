@@ -11,7 +11,7 @@ RISC V implementation
 * JAL target address resolved in ID phase
 * JALR target address resolved in ID phase 
 * WFI instr will be a simple nop and will not increment the instret counter
-
+* support interrupts 
 
 ## Non-compliance
 
