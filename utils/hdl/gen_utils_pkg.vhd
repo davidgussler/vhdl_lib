@@ -53,6 +53,36 @@ package gen_utils_pkg is
 
     type uart_parity_t is (NO_PARITY, EVEN_PARITY, ODD_PARITY); 
 
+    type axil_req_t is record 
+        awvalid : std_logic;
+        awaddr  : std_logic_vector(31 downto 0);
+        awprot  : std_logic_vector(2 downto 0);
+        wvalid  : std_logic;
+        wdata   : std_logic_vector(31 downto 0);
+        wstrb   : std_logic_vector(3 downto 0);
+        bready  : std_logic;
+        arvalid : std_logic;
+        araddr  : std_logic_vector(31 downto 0);
+        arprot  : std_logic_vector(2 downto 0);
+        rready  : std_logic;
+    end record;
+
+    type axil_resp_t is record 
+        awready : std_logic;
+        wready  : std_logic;
+        bvalid  : std_logic;
+        bresp   : std_logic_vector(1 downto 0);
+        arready : std_logic;
+        rvalid  : std_logic;
+        rdata   : std_logic_vector(31 downto 0);
+        rresp   : std_logic_vector(1 downto 0);
+    end record;
+
+    constant AXI_RESP_OKAY   : std_logic_vector(1 downto 0) := b"00";
+    constant AXI_RESP_EXOKAY : std_logic_vector(1 downto 0) := b"00";
+    constant AXI_RESP_SLVERR : std_logic_vector(1 downto 0) := b"00";
+    constant AXI_RESP_DECERR : std_logic_vector(1 downto 0) := b"00";
+
 
     -- Functions ===============================================================
     -- =========================================================================

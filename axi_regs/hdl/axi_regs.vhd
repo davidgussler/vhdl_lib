@@ -1,7 +1,7 @@
 -- #############################################################################
--- #  << Sync Bit >>
+-- #  << AXI4 Lite Register Bank >>
 -- # ===========================================================================
--- # File     : sync_bit.vhd
+-- # File     : axi_regs.vhd
 -- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
@@ -31,51 +31,67 @@
 -- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 -- #  POSSIBILITY OF SUCH DAMAGE.
 -- # ===========================================================================
--- # Simple 1-bit synchronizer.
 -- # 
 -- #############################################################################
+
+-- AXI Notes:
+-- 
+
+
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use work.gen_utils_pkg.all;
 
-entity sync_bit is
-   generic (
-      G_N_FLOPS : integer range 2 to 5 := 2;
-      G_RST_VAL : std_logic := '0'
-   );
-   port (
-      i_clk : in  std_logic;
-      i_rst : in  std_logic;
-      i_async : in  std_logic;
-      o_sync : out std_logic
-   );
+entity axi_regs is 
+    generic(
+        -- Number of registers in the bank
+        G_NUM_REGS : positive := 16;
+
+        -- Number of address bits to allocate for this register bank
+        G_NUM_ADR_BITS : positive := 4;
+
+        -- Address offset for each register in the array. 
+        G_REG_ADR : slv_array_t(G_NUM_REGS-1 downto 0)(G_NUM_ADR_BITS-1 downto 0);
+
+        -- 0: CTL - Control register (RW)
+        -- 1: STS - Status register (RO)
+        -- 2: IRQ - Interrupt register (RW1C)
+        G_REG_TYPE : int_array_t(G_NUM_REGS-1 downto 0);
+
+        -- Reset value for all of the RW registers. CTL and IRQ registers do not have a 
+        -- reset value. 
+        G_REG_RST_VAL : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0)
+    );
+    port(
+        i_clk : in std_logic;
+        i_rst : in std_logic;
+
+        -- AXI4-Lite Slave Interface
+        i_s_axi : in  axil_req_t; 
+        o_s_axi : out axil_resp_t;
+
+        -- Register Interface
+        o_ctl : out slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
+        i_sts : in  slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
+        i_irq : in  slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
+
+        -- Register R/W Indication Interface
+        o_rd_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0);
+        o_wr_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0)
+    );
 end entity;
 
-architecture rtl of sync_bit is
-   signal sync_regs : std_logic_vector(G_N_FLOPS-1 downto 0);
 
-   -- Vivado Synthesis Attributes --
-   -- tells synthesizer that these are synchronizing registers
-   attribute ASYNC_REG : string;
-   attribute ASYNC_REG of sync_regs : signal is "TRUE";
+architecture rtl of axi_regs is 
 
-   -- tells the synthesizer to not use CLB shift registers 
-   -- for sync_regs, which looks like a shift register 
-   attribute SHREG_EXTRACT : string;
-   attribute SHREG_EXTRACT of sync_regs : signal is "NO";
+
+
 begin
-   o_sync <= sync_regs(0);
+    o_s_axi.awready <= '1'; 
+    wready
+    arready
 
-   -- sync flops
-   process (i_clk)
-   begin
-      if rising_edge(i_clk) then
-         if (i_rst = '1') then
-            sync_regs <= (others=>G_RST_VAL); 
-         else 
-            sync_regs <= i_async & sync_regs(G_N_FLOPS-1 downto 1);
-         end if;
-      end if; 
-   end process;
+
 end architecture;

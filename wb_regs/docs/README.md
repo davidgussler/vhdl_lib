@@ -8,7 +8,7 @@ project isn't entirely necessary. All of the work intended for this program coul
 be done by hand, but it is tedious and error-prone. The bigger the project, the 
 more usefule a program like this starts to be. 
 
-This is also a good opportunity for me to improve my lagging Python skills. 
+This is also a good opportunity for me to improve my Python skills. 
 
 ## Requirements
 

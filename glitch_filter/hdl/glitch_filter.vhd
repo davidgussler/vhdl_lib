@@ -1,7 +1,7 @@
 -- #############################################################################
 -- #  << Glitch Filter >>
 -- # ===========================================================================
--- # File     : wglitch_filter.vhd
+-- # File     : glitch_filter.vhd
 -- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
@@ -32,6 +32,7 @@
 -- #  POSSIBILITY OF SUCH DAMAGE.
 -- # ===========================================================================
 -- # Ensures that an input is stable for a given number of clockcycles before
+-- # transitioning the filtered output.
 -- # 
 -- #############################################################################
 
