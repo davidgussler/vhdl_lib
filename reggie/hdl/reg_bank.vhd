@@ -1,5 +1,5 @@
 -- #############################################################################
--- #  << "Reggie" Register Bank >>
+-- #  << Register Bank >>
 -- # ===========================================================================
 -- # File     : reggie.vhd
 -- # Author   : David Gussler - david.gussler@proton.me
@@ -40,13 +40,16 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.gen_utils_pkg.all;
 
-entity reggie is 
+entity reg_bank is 
     generic(
         -- Number of registers in the bank
         G_NUM_REGS : positive := 16;
 
+        -- Number of address bits to use
+        G_ADR_BITS : positive := 8;
+
         -- Address offset for each register in the array. 
-        G_REG_ADR : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
+        G_REG_ADR : slv_array_t(G_NUM_REGS-1 downto 0)(G_ADR_BITS-1 downto 0);
 
         -- 0: CTL - Control register (RW)
         -- 1: STS - Status register (RO)
@@ -78,7 +81,7 @@ entity reggie is
 end entity;
 
 
-architecture rtl of reggie is 
+architecture rtl of reg_bank is 
 
 begin
 
