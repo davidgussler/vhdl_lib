@@ -1,7 +1,7 @@
 -- #############################################################################
--- #  << AXI4 Lite Register Bank >>
+-- #  << AXI4-Lite to Simple Bus Adaptor >>
 -- # ===========================================================================
--- # File     : axi_regs.vhd
+-- # File     : axil_to_bus.vhd
 -- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
@@ -34,64 +34,30 @@
 -- # 
 -- #############################################################################
 
--- AXI Notes:
--- 
-
-
-
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.gen_utils_pkg.all;
 
-entity axi_regs is 
-    generic(
-        -- Number of registers in the bank
-        G_NUM_REGS : positive := 16;
-
-        -- Number of address bits to allocate for this register bank
-        G_NUM_ADR_BITS : positive := 4;
-
-        -- Address offset for each register in the array. 
-        G_REG_ADR : slv_array_t(G_NUM_REGS-1 downto 0)(G_NUM_ADR_BITS-1 downto 0);
-
-        -- 0: CTL - Control register (RW)
-        -- 1: STS - Status register (RO)
-        -- 2: IRQ - Interrupt register (RW1C)
-        G_REG_TYPE : int_array_t(G_NUM_REGS-1 downto 0);
-
-        -- Reset value for all of the RW registers. CTL and IRQ registers do not have a 
-        -- reset value. 
-        G_REG_RST_VAL : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0)
-    );
+entity axil_to_bus is 
     port(
         i_clk : in std_logic;
         i_rst : in std_logic;
 
-        -- AXI4-Lite Slave Interface
-        i_s_axi : in  axil_req_t; 
-        o_s_axi : out axil_resp_t;
+        -- Simple Bus Slave
+        i_s_bus : in  bus_req_t; 
+        o_s_bus : out bus_resp_t;
 
-        -- Register Interface
-        o_ctl : out slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
-        i_sts : in  slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
-        i_irq : in  slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
-
-        -- Register R/W Indication Interface
-        o_rd_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0);
-        o_wr_pulse : out std_logic_vector(G_NUM_REGS-1 downto 0)
+        -- AXI4-Lite Master
+        i_m_axil : in  axil_resp_t;
+        o_m_axil : out axil_req_t
     );
 end entity;
 
 
-architecture rtl of axi_regs is 
-
-
+architecture rtl of axil_to_bus is 
 
 begin
-    o_s_axi.awready <= '1'; 
-    wready
-    arready
 
 
 end architecture;

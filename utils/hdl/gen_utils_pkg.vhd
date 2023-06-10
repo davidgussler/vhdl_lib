@@ -53,6 +53,8 @@ package gen_utils_pkg is
 
     type uart_parity_t is (NO_PARITY, EVEN_PARITY, ODD_PARITY); 
 
+    -- Interfaces ==============================================================
+    -- =========================================================================
     type axil_req_t is record 
         awvalid : std_logic;
         awaddr  : std_logic_vector(31 downto 0);
@@ -82,6 +84,26 @@ package gen_utils_pkg is
     constant AXI_RESP_EXOKAY : std_logic_vector(1 downto 0) := b"00";
     constant AXI_RESP_SLVERR : std_logic_vector(1 downto 0) := b"00";
     constant AXI_RESP_DECERR : std_logic_vector(1 downto 0) := b"00";
+
+    -- This is a dead-simple bus interface for basic components that don't need 
+    -- most of the features offered by busses like axi and wishbone.
+    -- Read and write channels can operate independently.
+    -- Slave is expected to always respond on the cycle following the request.
+    -- No errors, wait states, or write strobes. 
+    -- Full duplex communication at 1 transfer per cycle for maximum bandwidth.
+    -- Recommended to use this for user logic and connect to an axi adaptor for 
+    -- external pipelining and interconnect logic.
+    type bus_req_t is record 
+        i_ren   : std_logic;
+        i_raddr : std_logic_vector(31 downto 0);
+        i_wen   : std_logic;
+        i_waddr : std_logic_vector(31 downto 0);
+        i_wdata : std_logic_vector(31 downto 0);
+    end record;
+
+    type bus_resp_t is record 
+        o_rdata : std_logic_vector(31 downto 0);
+    end record;
 
 
     -- Functions ===============================================================

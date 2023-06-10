@@ -1,5 +1,10 @@
 ### Register Automation Project
 
+## WARNING
+
+THIS "wb_regs" PROJECT IS DEPRECATED AND IS GOING TO BE REPLACED BY "reggie" 
+
+
 ## Rationalle
 
 Managing a register map is a common problem for FPGA Projects. In this python 
