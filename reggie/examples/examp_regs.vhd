@@ -93,10 +93,10 @@ begin
 
     o_ctl.reg0.fld0 <= ctl(0)(0);
     o_ctl.reg0.fld1 <= ctl(0)(11 downto 8);
-    o_ctl.reg1_arr(0).fld0 <= ctl(1)(8);
-    o_ctl.reg1_arr(0).fld1 <= ctl(1)(7 downto 0);
-    o_ctl.reg1_arr(1).fld0 <= ctl(2)(8);
-    o_ctl.reg1_arr(1).fld1 <= ctl(2)(7 downto 0);
+    o_ctl.reg1_arr(0).fld0 <= ctl(1)(0);
+    o_ctl.reg1_arr(0).fld1 <= ctl(1)(15 downto 8);
+    o_ctl.reg1_arr(1).fld0 <= ctl(2)(0);
+    o_ctl.reg1_arr(1).fld1 <= ctl(2)(15 downto 8);
 
     sts(3)(31 downto 0) <= i_sts.reg2.fld0; 
 

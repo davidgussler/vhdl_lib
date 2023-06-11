@@ -1,0 +1,110 @@
+{
+    "name": "examp_regs",
+    "desc": "Description of this example register map",
+    "addr_width": 8,
+    "data_width": 32, 
+    "version": "0.1.0",
+    "regs": [
+        {
+            "name": "reg0",
+            "desc": "This is an example of a RW register",
+            "access": "CTL",
+            "addr_offset": "0x0",
+            "fields": [
+                {
+                    "name": "fld0",
+                    "desc": "Description of fld0",
+                    "bit_width": 1,
+                    "bit_offset": 0,
+                    "reset_value": "0x0",
+                    "enums": [
+                        {
+                            "desc": "on",
+                            "value": "0x1"
+                        },
+                        {
+                            "desc": "off",
+                            "value": "0x0"
+                        }
+                    ]
+                },
+                {
+                    "name": "fld1",
+                    "desc": "Description of fld1",
+                    "bit_width": 4,
+                    "bit_offset": 8,
+                    "reset_value": "0x0"
+                }
+            ]
+        },
+        {
+            "name": "reg1",
+            "desc": "This is an example of a RW register array",
+            "array": true,
+            "array_length": 2,
+            "access": "CTL",
+            "addr_offset": "0x4",
+            "fields": [
+                {
+                    "name": "fld0",
+                    "desc": "Description of fld0",
+                    "bit_width": 1,
+                    "bit_offset": 0
+                },
+                {
+                    "name": "fld1",
+                    "desc": "Description of fld1",
+                    "bit_width": 8,
+                    "bit_offset": 8,
+                    "reset_value": "0x0"
+                }
+            ]
+        },
+        {
+            "name": "reg2",
+            "desc": "This is an example of a RO register",
+            "access": "STS",
+            "addr_offset": "0xC",
+            "fields": [
+                {
+                    "name": "fld0",
+                    "desc": "Description of fld0",
+                    "bit_width": 32,
+                    "bit_offset": 0
+                }
+            ]
+        },
+        {
+            "name": "reg3",
+            "desc": "This is an example of a RW1C register",
+            "access": "IRQ",
+            "addr_offset": "0x10",
+            "fields": [
+                {
+                    "name": "irq0",
+                    "desc": "Description of irq0",
+                    "bit_width": 1,
+                    "bit_offset": 0
+                },
+                {
+                    "name": "irq1",
+                    "desc": "Description of irq0",
+                    "bit_width": 1,
+                    "bit_offset": 1
+                },
+                {
+                    "name": "irq2",
+                    "desc": "Description of irq0",
+                    "bit_width": 1,
+                    "bit_offset": 2
+                },
+                {
+                    "name": "irq3",
+                    "desc": "Description of irq0",
+                    "bit_width": 1,
+                    "bit_offset": 3
+                }
+            ]
+        }
+    ]
+}
