@@ -2,8 +2,6 @@ use std::fs;
 use serde::{Serialize, Deserialize};
 use serde_json::{Result};
 
-
-
 fn main() {
     let file_path = "/home/david/SynologyDrive/cloud_drive/prj/dev/vhdl_lib/reggie/scripts/reggie/src/examp.json"; 
     let contents = fs::read_to_string(file_path)
@@ -65,6 +63,7 @@ struct EnumDesc {
 
 fn parse_json(json_str: &str) -> Result<RegMap> {
     let reg_map: RegMap = serde_json::from_str(json_str)?;
+    // Check for invalid values
     Ok(reg_map)
 }
 

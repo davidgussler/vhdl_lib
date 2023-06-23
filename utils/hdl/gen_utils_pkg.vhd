@@ -94,15 +94,15 @@ package gen_utils_pkg is
     -- Recommended to use this for user logic and connect to an axi adaptor for 
     -- external pipelining and interconnect logic.
     type bus_req_t is record 
-        i_ren   : std_logic;
-        i_raddr : std_logic_vector(31 downto 0);
-        i_wen   : std_logic;
-        i_waddr : std_logic_vector(31 downto 0);
-        i_wdata : std_logic_vector(31 downto 0);
+        ren   : std_logic;
+        raddr : std_logic_vector(31 downto 0);
+        wen   : std_logic;
+        waddr : std_logic_vector(31 downto 0);
+        wdata : std_logic_vector(31 downto 0);
     end record;
 
     type bus_resp_t is record 
-        o_rdata : std_logic_vector(31 downto 0);
+        rdata : std_logic_vector(31 downto 0);
     end record;
 
 

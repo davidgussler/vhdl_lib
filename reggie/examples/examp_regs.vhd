@@ -18,11 +18,10 @@ entity examp_regs is
         -- Register Interface
         o_ctl : out examp_regs_ctl_t;
         i_sts : in  examp_regs_sts_t;
-        i_irq : in  examp_regs_irq_t;
 
         -- Register R/W Indication Interface
-        o_rd : out examp_regs_rw_t;
-        o_wr : out examp_regs_rw_t
+        o_wr : out examp_regs_wr_t;
+        o_rd : out examp_regs_rd_t
     );
 end entity examp_regs;
 
@@ -34,15 +33,13 @@ architecture rtl of examp_regs is
         0 => X"00",
         1 => X"04",
         2 => X"08",
-        3 => X"0C",
-        4 => X"10"
+        3 => X"0C"
     ); 
     constant REG_TYPE : int_array_t(NUM_REGS-1 downto 0) := (
         0 => 0,
         1 => 0,
         2 => 0,
-        3 => 1,
-        4 => 2
+        3 => 1
     ); 
     constant REG_RST_VAL : slv_array_t(NUM_REGS-1 downto 0)(31 downto 0) := (
         0 => X"0000_0000",
@@ -53,11 +50,11 @@ architecture rtl of examp_regs is
     signal bus_req : bus_req_t; 
     signal bus_resp : bus_resp_t;
 
-    signal ctl : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
-    signal sts : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
-    signal irq : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0);
-    signal rd : std_logic_vector(G_NUM_REGS-1 downto 0);
-    signal wr : std_logic_vector(G_NUM_REGS-1 downto 0); 
+    signal ctl : slv_array_t(NUM_REGS-1 downto 0)(31 downto 0);
+    signal sts : slv_array_t(NUM_REGS-1 downto 0)(31 downto 0);
+    signal irq : slv_array_t(NUM_REGS-1 downto 0)(31 downto 0);
+    signal rd : std_logic_vector(NUM_REGS-1 downto 0);
+    signal wr : std_logic_vector(NUM_REGS-1 downto 0); 
 
 begin
 
@@ -86,9 +83,8 @@ begin
         o_s_bus => bus_resp,
         o_ctl   => ctl,
         i_sts   => sts,
-        i_irq   => irq,
-        o_rd    => rd,
-        o_wr    => wr
+        o_wr    => wr,
+        o_rd    => rd
     );
 
     o_ctl.reg0.fld0 <= ctl(0)(0);
@@ -100,21 +96,13 @@ begin
 
     sts(3)(31 downto 0) <= i_sts.reg2.fld0; 
 
-    irq(4)(0) <= i_irq.reg3.irq0;
-    irq(4)(1) <= i_irq.reg3.irq1;
-    irq(4)(2) <= i_irq.reg3.irq2;
-    irq(4)(3) <= i_irq.reg3.irq3;
-
     o_rd.reg0 <= rd(0);
     o_rd.reg1_arr(0) <= rd(1);
     o_rd.reg1_arr(1) <= rd(2);
     o_rd.reg2 <= rd(3);
-    o_rd.reg3 <= rd(4);
 
     o_wr.reg0 <= wr(0);
     o_wr.reg1_arr(0) <= wr(1);
     o_wr.reg1_arr(1) <= wr(2);
-    o_wr.reg2 <= wr(3);
-    o_wr.reg3 <= wr(4);
 
 end architecture;

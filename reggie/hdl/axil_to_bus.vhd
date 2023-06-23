@@ -44,13 +44,13 @@ entity axil_to_bus is
         i_clk : in std_logic;
         i_rst : in std_logic;
 
-        -- Simple Bus Slave
-        i_s_bus : in  bus_req_t; 
-        o_s_bus : out bus_resp_t;
+        -- AXI4-Lite Slave
+        i_s_axil : in  axil_req_t;
+        o_s_axil : out axil_resp_t;
 
-        -- AXI4-Lite Master
-        i_m_axil : in  axil_resp_t;
-        o_m_axil : out axil_req_t
+        -- Simple Bus Master
+        i_m_bus : in  bus_resp_t; 
+        o_m_bus : out bus_req_t
     );
 end entity;
 
