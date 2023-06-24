@@ -81,9 +81,9 @@ package gen_utils_pkg is
     end record;
 
     constant AXI_RESP_OKAY   : std_logic_vector(1 downto 0) := b"00";
-    constant AXI_RESP_EXOKAY : std_logic_vector(1 downto 0) := b"00";
-    constant AXI_RESP_SLVERR : std_logic_vector(1 downto 0) := b"00";
-    constant AXI_RESP_DECERR : std_logic_vector(1 downto 0) := b"00";
+    constant AXI_RESP_EXOKAY : std_logic_vector(1 downto 0) := b"01";
+    constant AXI_RESP_SLVERR : std_logic_vector(1 downto 0) := b"10";
+    constant AXI_RESP_DECERR : std_logic_vector(1 downto 0) := b"11";
 
     -- This is a dead-simple bus interface for basic components that don't need 
     -- most of the features offered by busses like axi and wishbone.
