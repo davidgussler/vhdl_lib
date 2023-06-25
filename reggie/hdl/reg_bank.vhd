@@ -49,6 +49,18 @@
 -- #       Written by firmware with "i_sts"
 -- #       "o_rd" is pulsed on a software read
 -- #       "o_wr" is never pulsed
+-- #   * RWV (Read Write Volatile)
+-- #       This is a bit like a RW and RO register combined
+-- #       Written by software / firmware and read by software / firmware
+-- #       This means that the value written by software by not necessarilly 
+-- #       be the same value that is read by software (the RW register
+-- #       guarentees that FW will not modify the value written by SW, the RWV
+-- #       does not guarentee this)
+-- #       Software writes are read by firmware with "o_ctl"
+-- #       Software reads are written by firmware with "i_sts"
+-- #       "o_rd" and "o_wr" are pulsed when software reads or writes
+-- #       To reiterate how this works, if firmware connects "o_ctl" to "i_sts"
+-- #       then this type of register would act just like a RW register.
 -- # 
 -- #############################################################################
 
@@ -68,12 +80,16 @@ entity reg_bank is
         -- Address of each register
         G_REG_ADR : slv_array_t(G_NUM_REGS-1 downto 0)(G_ADR_BITS-1 downto 0);
 
-        -- 0: RW - Control register
-        -- 1: RO - Status register
+        -- TODO: Get rid of RW and RO... Make ALL registers RWV...
+        -- Then the user can decide which type of register to use with external logic
+        -- Will simplify this design and allow more upstream flexibility.
+        -- 0: RW  (Read Write)          - Control register
+        -- 1: RO  (Read Only)           - Status register
+        -- 2: RWV (Read Write Volatile) - Control / Status register
         G_REG_TYPE : int_array_t(G_NUM_REGS-1 downto 0);
 
-        -- Reset value for all of the CTL registers. STS registers do not have a 
-        -- reset value becasue they are dependent on user logic and IRQ 
+        -- Reset value for all of the RW and RWV registers. STS registers do not 
+        -- have a reset value becasue they are dependent on user logic and IRQ 
         -- registers always reset to 0. 
         G_REG_RST_VAL : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0)
     );
