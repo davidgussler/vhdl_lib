@@ -68,8 +68,8 @@ architecture tb of skid_buff_tb is
 
     -- DUT Generics / Signals
     constant C_WIDTH : positive := 8; 
-    constant C_REG_OUTPUTS : boolean := false; 
-
+    -- constant C_REG_OUTPUTS : boolean := false; 
+    constant C_REG_OUTPUTS : boolean := true; 
 
     signal o_ready : std_logic;
     signal i_valid : std_logic := '0';

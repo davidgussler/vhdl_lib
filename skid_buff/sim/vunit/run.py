@@ -19,5 +19,8 @@ lib = vu.add_library("lib")
 lib.add_source_files("../../hdl/*.vhd")
 lib.add_source_files("./*.vhd")
 
-# Run vunit function
+# Debugging visibility 
+lib.set_compile_option("modelsim.vcom_flags", ["+acc",  "-O0"])
+
+# Start
 vu.main()

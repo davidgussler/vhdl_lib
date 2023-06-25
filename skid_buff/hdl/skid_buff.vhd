@@ -7,7 +7,7 @@
 -- # ===========================================================================
 -- # BSD 2-Clause License
 -- # 
--- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # Copyright (c) 2022-2023, David Gussler. All rights reserved.
 -- # 
 -- # Redistribution and use in source and binary forms, with or without
 -- # modification, are permitted provided that the following conditions are met:
@@ -38,6 +38,9 @@
 -- # This module can be inserted into the critical path of a valid/ready 
 -- # handshake protocal to pipeline the logic while maintaining 100 percent 
 -- # thruput.
+-- # This logic can be pretty confusing to understand but I promise it works :) 
+-- # The beauty is that this can easilly be dropped in somewhere without needing 
+-- # to think thru the complicated implementation details. 
 -- #
 -- # Source: https://zipcpu.com/blog/2019/05/22/skidbuffer.html
 -- # 
@@ -62,12 +65,12 @@ entity skid_buff is
         i_clk : in std_logic;
         i_rst : in std_logic;
 
-        -- Input Interface (Master Side)
+        -- Input Interface 
         i_valid : in  std_logic;
         o_ready : out std_logic;
         i_data  : in  std_logic_vector(G_WIDTH-1 downto 0);
 
-        -- Output Interface (Slave Side)
+        -- Output Interface 
         o_valid : out std_logic;
         i_ready : in  std_logic;
         o_data  : out std_logic_vector(G_WIDTH-1 downto 0)
@@ -126,7 +129,7 @@ begin
 
     -- Optional Output Registers -----------------------------------------------
     -- -------------------------------------------------------------------------
-    -- if slave side is NOT stalled, then the next data/valid can update
+    -- If slave side is NOT stalled, then the next data/valid can update
     -- but if the slave is stalled, then the next data/valid should
     -- stay equal to the last. Basics of how an axi master works.
     -- This expression: "not (ovalid = '1' and i_ready = '0')"
