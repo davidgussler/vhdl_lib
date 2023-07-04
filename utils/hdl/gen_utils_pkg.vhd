@@ -31,9 +31,7 @@
 -- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 -- #  POSSIBILITY OF SUCH DAMAGE.
 -- # ===========================================================================
--- # VHDL utility functions. These are not synthesizeable, but can be used for
--- # creating arrays, determining bounds, and other useful things at compile 
--- # time.
+-- # VHDL utility functions and types common accross most modules in vhdl_lib.
 -- #
 -- #############################################################################
 

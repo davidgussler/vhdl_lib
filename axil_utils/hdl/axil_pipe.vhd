@@ -60,6 +60,9 @@ entity axil_pipe is
 end entity;
 
 architecture rtl of axil_pipe is 
+    signal aw_reg : std_logic_vector(i_s_axil.awaddr'LENGTH + i_s_axil.awprot'LENGTH - 1 downto 0);
+    signal ar_reg : std_logic_vector(i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH - 1 downto 0);
+    signal r_reg  : std_logic_vector(i_m_axil.rdata'LENGTH + i_m_axil.rresp'LENGTH - 1 downto 0);
 begin 
     u_aw_skid_buff : entity work.skid_buff
     generic map (
@@ -76,8 +79,11 @@ begin
 
         o_valid => o_m_axil.awvalid,
         i_ready => i_m_axil.awready,
-        o_data  => o_m_axil.awaddr & o_m_axil.awprot
+        o_data  => aw_reg 
     );
+    o_m_axil.awaddr <= aw_reg(i_s_axil.awaddr'LENGTH + i_s_axil.awprot'LENGTH - 1 downto i_s_axil.awprot'LENGTH);
+    o_m_axil.awprot <= aw_reg(i_s_axil.awprot'LENGTH-1 downto 0);
+
 
     u_w_skid_buff : entity work.skid_buff
     generic map (
@@ -97,6 +103,7 @@ begin
         o_data  => o_m_axil.wdata
     );
 
+
     u_ar_skid_buff : entity work.skid_buff
     generic map (
         G_WIDTH    => i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH,
@@ -112,8 +119,11 @@ begin
 
         o_valid => o_m_axil.arvalid,
         i_ready => i_m_axil.arready,
-        o_data  => o_m_axil.araddr & o_m_axil.arprot
+        o_data  => ar_reg
     );
+    o_m_axil.araddr <= ar_reg(i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH-1 downto i_s_axil.arprot'LENGTH);
+    o_m_axil.arprot <= ar_reg(i_s_axil.arprot'LENGTH-1 downto 0);
+
 
     u_r_skid_buff : entity work.skid_buff
     generic map (
@@ -130,8 +140,11 @@ begin
 
         o_valid => o_s_axil.rvalid,
         i_ready => i_s_axil.rready,
-        o_data  => o_s_axil.rdata & o_s_axil.rresp
+        o_data  => r_reg
     );
+    o_s_axil.rdata <= r_reg(i_m_axil.rdata'LENGTH + i_m_axil.rresp'LENGTH-1 downto i_m_axil.rresp'LENGTH);
+    o_s_axil.rresp <= r_reg(i_m_axil.rresp'LENGTH-1 downto 0);
+
 
     u_b_skid_buff : entity work.skid_buff
     generic map (

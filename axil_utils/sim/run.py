@@ -13,12 +13,14 @@ vu = VUnit.from_argv()
 vu.add_verification_components()
 vu.add_osvvm()
 
-# Add src files
+# Add files
 lib = vu.add_library("lib")
 lib.add_source_files("./../../utils/hdl/gen_utils_pkg.vhd")
 lib.add_source_files("./../../skid_buff/hdl/skid_buff.vhd")
-lib.add_source_files("./axil_to_bus_tb.vhd")
 lib.add_source_files("./../hdl/axil_to_bus.vhd")
+lib.add_source_files("./../hdl/axil_pipe.vhd")
+lib.add_source_files("./axil_to_bus_tb.vhd")
+lib.add_source_files("./axil_pipe_tb.vhd")
 
 # Debugging visibility 
 lib.set_compile_option("modelsim.vcom_flags", ["+acc",  "-O0"])
