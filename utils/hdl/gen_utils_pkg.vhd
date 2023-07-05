@@ -78,6 +78,9 @@ package gen_utils_pkg is
         rresp   : std_logic_vector(1 downto 0);
     end record;
 
+    type axil_req_array_t is array (natural range <>) of axil_req_t;
+    type axil_resp_array_t is array (natural range <>) of axil_resp_t;
+
     constant AXI_RESP_OKAY   : std_logic_vector(1 downto 0) := b"00";
     constant AXI_RESP_EXOKAY : std_logic_vector(1 downto 0) := b"01";
     constant AXI_RESP_SLVERR : std_logic_vector(1 downto 0) := b"10";

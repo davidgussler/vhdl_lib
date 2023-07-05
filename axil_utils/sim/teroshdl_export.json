@@ -579,9 +579,18 @@
             "location": {
                 "file_name": "/home/david/SynologyDrive/cloud_drive/prj/dev/vhdl_lib/axil_utils/sim/axil_pipe_tb.vhd",
                 "length": 5,
-                "offset": 3775
+                "offset": 4575
             },
             "name": "lib.axil_pipe_tb.basic"
+        },
+        {
+            "attributes": {},
+            "location": {
+                "file_name": "/home/david/SynologyDrive/cloud_drive/prj/dev/vhdl_lib/axil_utils/sim/axil_pipe_tb.vhd",
+                "length": 26,
+                "offset": 4835
+            },
+            "name": "lib.axil_pipe_tb.Test to_string for boolean"
         }
     ]
 }

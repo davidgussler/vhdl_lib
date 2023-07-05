@@ -43,7 +43,7 @@ use work.gen_utils_pkg.all;
 
 entity axil_pipe is
     generic(
-        G_NUM_STAGES : positive := 1
+        G_NUM_STAGES : positive := 2
     );
     port(
         i_clk : in std_logic;
@@ -63,104 +63,121 @@ architecture rtl of axil_pipe is
     signal aw_reg : std_logic_vector(i_s_axil.awaddr'LENGTH + i_s_axil.awprot'LENGTH - 1 downto 0);
     signal ar_reg : std_logic_vector(i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH - 1 downto 0);
     signal r_reg  : std_logic_vector(i_m_axil.rdata'LENGTH + i_m_axil.rresp'LENGTH - 1 downto 0);
+    signal w_reg : std_logic_vector(i_s_axil.wdata'LENGTH + i_s_axil.wstrb'LENGTH - 1 downto 0);
+
+    signal req : axil_req_array_t(0 to G_NUM_STAGES);
+    signal resp : axil_resp_array_t(0 to G_NUM_STAGES);
+
 begin 
-    u_aw_skid_buff : entity work.skid_buff
-    generic map (
-        G_WIDTH    => i_s_axil.awaddr'LENGTH + i_s_axil.awprot'LENGTH,
-        G_REG_OUTS => TRUE
-    )
-    port map (
-        i_clk   => i_clk,
-        i_rst   => i_rst,
+    req(0) <= i_s_axil; 
+    resp(0) <= i_m_axil;
+    o_s_axil <= resp(G_NUM_STAGES); 
+    o_m_axil <= req(G_NUM_STAGES); 
 
-        i_valid => i_s_axil.awvalid,
-        o_ready => o_s_axil.awready,
-        i_data  => i_s_axil.awaddr & i_s_axil.awprot, 
+    gen_stages : for i in 1 to G_NUM_STAGES generate
 
-        o_valid => o_m_axil.awvalid,
-        i_ready => i_m_axil.awready,
-        o_data  => aw_reg 
-    );
-    o_m_axil.awaddr <= aw_reg(i_s_axil.awaddr'LENGTH + i_s_axil.awprot'LENGTH - 1 downto i_s_axil.awprot'LENGTH);
-    o_m_axil.awprot <= aw_reg(i_s_axil.awprot'LENGTH-1 downto 0);
+        u_aw_skid_buff : entity work.skid_buff
+        generic map (
+            G_WIDTH    => i_s_axil.awaddr'LENGTH + i_s_axil.awprot'LENGTH,
+            G_REG_OUTS => TRUE
+        )
+        port map (
+            i_clk   => i_clk,
+            i_rst   => i_rst,
 
+            i_valid => i_s_axil.awvalid,
+            o_ready => o_s_axil.awready,
+            i_data  => i_s_axil.awaddr & i_s_axil.awprot, 
 
-    u_w_skid_buff : entity work.skid_buff
-    generic map (
-        G_WIDTH    => i_s_axil.wdata'LENGTH,
-        G_REG_OUTS => TRUE
-    )
-    port map (
-        i_clk   => i_clk,
-        i_rst   => i_rst,
-
-        i_valid => i_s_axil.wvalid,
-        o_ready => o_s_axil.wready,
-        i_data  => i_s_axil.wdata,
-
-        o_valid => o_m_axil.wvalid,
-        i_ready => i_m_axil.wready,
-        o_data  => o_m_axil.wdata
-    );
+            o_valid => o_m_axil.awvalid,
+            i_ready => i_m_axil.awready,
+            o_data  => aw_reg 
+        );
+        o_m_axil.awaddr <= aw_reg(i_s_axil.awaddr'LENGTH + i_s_axil.awprot'LENGTH - 1 downto i_s_axil.awprot'LENGTH);
+        o_m_axil.awprot <= aw_reg(i_s_axil.awprot'LENGTH-1 downto 0);
 
 
-    u_ar_skid_buff : entity work.skid_buff
-    generic map (
-        G_WIDTH    => i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH,
-        G_REG_OUTS => TRUE
-    )
-    port map (
-        i_clk   => i_clk,
-        i_rst   => i_rst,
+        u_w_skid_buff : entity work.skid_buff
+        generic map (
+            G_WIDTH    => i_s_axil.wdata'LENGTH + i_s_axil.wstrb'LENGTH,
+            G_REG_OUTS => TRUE
+        )
+        port map (
+            i_clk   => i_clk,
+            i_rst   => i_rst,
 
-        i_valid => i_s_axil.arvalid,
-        o_ready => o_s_axil.arready,
-        i_data  => i_s_axil.araddr & i_s_axil.arprot,
+            i_valid => i_s_axil.wvalid,
+            o_ready => o_s_axil.wready,
+            i_data  => i_s_axil.wdata & i_s_axil.wstrb,
 
-        o_valid => o_m_axil.arvalid,
-        i_ready => i_m_axil.arready,
-        o_data  => ar_reg
-    );
-    o_m_axil.araddr <= ar_reg(i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH-1 downto i_s_axil.arprot'LENGTH);
-    o_m_axil.arprot <= ar_reg(i_s_axil.arprot'LENGTH-1 downto 0);
+            o_valid => o_m_axil.wvalid,
+            i_ready => i_m_axil.wready,
+            o_data  => w_reg 
+        );
+        o_m_axil.wdata <= w_reg(i_s_axil.wdata'LENGTH + i_s_axil.wstrb'LENGTH-1 downto i_s_axil.wstrb'LENGTH);
+        o_m_axil.wstrb <= w_reg(i_s_axil.wstrb'LENGTH-1 downto 0);
+
+        u_ar_skid_buff : entity work.skid_buff
+        generic map (
+            G_WIDTH    => i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH,
+            G_REG_OUTS => TRUE
+        )
+        port map (
+            i_clk   => i_clk,
+            i_rst   => i_rst,
+
+            i_valid => i_s_axil.arvalid,
+            o_ready => o_s_axil.arready,
+            i_data  => i_s_axil.araddr & i_s_axil.arprot,
+
+            o_valid => o_m_axil.arvalid,
+            i_ready => i_m_axil.arready,
+            o_data  => ar_reg
+        );
+        o_m_axil.araddr <= ar_reg(i_s_axil.araddr'LENGTH + i_s_axil.arprot'LENGTH-1 downto i_s_axil.arprot'LENGTH);
+        o_m_axil.arprot <= ar_reg(i_s_axil.arprot'LENGTH-1 downto 0);
 
 
-    u_r_skid_buff : entity work.skid_buff
-    generic map (
-        G_WIDTH    => i_m_axil.rdata'LENGTH + i_m_axil.rresp'LENGTH,
-        G_REG_OUTS => TRUE
-    )
-    port map (
-        i_clk   => i_clk,
-        i_rst   => i_rst,
+        u_r_skid_buff : entity work.skid_buff
+        generic map (
+            G_WIDTH    => i_m_axil.rdata'LENGTH + i_m_axil.rresp'LENGTH,
+            G_REG_OUTS => TRUE
+        )
+        port map (
+            i_clk   => i_clk,
+            i_rst   => i_rst,
 
-        i_valid => i_m_axil.rvalid,
-        o_ready => o_m_axil.rready,
-        i_data  => i_m_axil.rdata & i_m_axil.rresp,
+            i_valid => i_m_axil.rvalid,
+            o_ready => o_m_axil.rready,
+            i_data  => i_m_axil.rdata & i_m_axil.rresp,
 
-        o_valid => o_s_axil.rvalid,
-        i_ready => i_s_axil.rready,
-        o_data  => r_reg
-    );
-    o_s_axil.rdata <= r_reg(i_m_axil.rdata'LENGTH + i_m_axil.rresp'LENGTH-1 downto i_m_axil.rresp'LENGTH);
-    o_s_axil.rresp <= r_reg(i_m_axil.rresp'LENGTH-1 downto 0);
+            o_valid => o_s_axil.rvalid,
+            i_ready => i_s_axil.rready,
+            o_data  => r_reg
+        );
+        o_s_axil.rdata <= r_reg(i_m_axil.rdata'LENGTH + i_m_axil.rresp'LENGTH-1 downto i_m_axil.rresp'LENGTH);
+        o_s_axil.rresp <= r_reg(i_m_axil.rresp'LENGTH-1 downto 0);
 
 
-    u_b_skid_buff : entity work.skid_buff
-    generic map (
-        G_WIDTH    => i_m_axil.bresp'LENGTH,
-        G_REG_OUTS => TRUE
-    )
-    port map (
-        i_clk   => i_clk,
-        i_rst   => i_rst,
+        u_b_skid_buff : entity work.skid_buff
+        generic map (
+            G_WIDTH    => i_m_axil.bresp'LENGTH,
+            G_REG_OUTS => TRUE
+        )
+        port map (
+            i_clk   => i_clk,
+            i_rst   => i_rst,
 
-        i_valid => i_m_axil.bvalid,
-        o_ready => o_m_axil.bready,
-        i_data  => i_m_axil.bresp,
+            i_valid => i_m_axil.bvalid,
+            o_ready => o_m_axil.bready,
+            i_data  => i_m_axil.bresp,
 
-        o_valid => o_s_axil.bvalid,
-        i_ready => i_s_axil.bready,
-        o_data  => o_s_axil.bresp
-    );
+            o_valid => o_s_axil.bvalid,
+            i_ready => i_s_axil.bready,
+            o_data  => o_s_axil.bresp
+        );
+        
+    end generate;
+
+
 end architecture;

@@ -41,6 +41,7 @@ context ieee.ieee_std_context;
 library vunit_lib;
 context vunit_lib.vunit_context;
 context vunit_lib.vc_context;
+use vunit_lib.axi_lite_master_pkg.all;
 
 library osvvm;
 use osvvm.RandomPkg.all;
@@ -75,12 +76,23 @@ architecture tb of axil_pipe_tb is
     -- BFMs
     constant axil_master : bus_master_t := new_bus(data_length => 32, address_length => 32);
 
-    constant MEM_BYTES : natural := 1024*4; 
+    constant MEM_BYTES : natural := 4096; 
     constant mem       : memory_t := new_memory;
     constant mem_buff  : buffer_t := allocate(mem, MEM_BYTES);
-    constant axil_slave : axi_slave_t := new_axi_slave(mem, data_length => 32, address_length => 32);
+    constant axil_slave : axi_slave_t := new_axi_slave(
+        memory => mem,
+        address_stall_probability => 0.0,
+        data_stall_probability => 0.0,
+        write_response_stall_probability => 0.0,
+        min_response_latency => 0 ns,
+        max_response_latency => 0 ns
+    );
 
-
+    signal rid_dummy   : std_logic_vector(7 downto 0); 
+    signal rlast_dummy : std_logic;
+    signal bid_dummy   : std_logic_vector(7 downto 0);
+  
+    -- Helper procedures
     procedure reset_prc(signal rst : out std_logic) is 
     begin 
         info("Resetting DUT ...");
@@ -96,6 +108,7 @@ begin
     main : process
         variable rdata : std_logic_vector(axil_m_resp.rdata'range);
         variable wdata : std_logic_vector(axil_m_req.wdata'range);
+        variable expdata : std_logic_vector(axil_m_req.wdata'range);
         variable rnd : RandomPType;
     begin
 
@@ -114,8 +127,12 @@ begin
 
             if run("basic") then
                 -- The test case code is placed in the corresponding (els)if branch.
-                write_bus(net, axil_master, X"0123_4567", X"ABCD_EF12");
-                read_bus(net, axil_master, X"0123_4567", rdata);
+                write_axi_lite(net, axil_master, X"0000_0560", X"ABCD_EF12", work.gen_utils_pkg.AXI_RESP_OKAY, B"1010");
+                write_axi_lite(net, axil_master, X"0000_0564", X"DEAD_BEEF", work.gen_utils_pkg.AXI_RESP_OKAY, B"0101");
+                check_axi_lite(net, axil_master, X"0000_0560", work.gen_utils_pkg.AXI_RESP_OKAY, X"AB00_EF00");
+                check_axi_lite(net, axil_master, X"0000_0564", work.gen_utils_pkg.AXI_RESP_OKAY, X"00AD_00EF" );
+                write_axi_lite(net, axil_master, X"0000_0568", X"1234_5678", work.gen_utils_pkg.AXI_RESP_OKAY, B"1111");
+                check_axi_lite(net, axil_master, X"0000_0568", work.gen_utils_pkg.AXI_RESP_OKAY, X"1234_5678");
 
             elsif run("Test to_string for boolean") then
                 check_equal(to_string(true), "true");
@@ -186,49 +203,50 @@ begin
     -- S BFM ---------------------------------------------------------------------
     -- -------------------------------------------------------------------------
 
-    u_axi_read_slave : axi_read_slave
+    u_axi_read_slave: entity vunit_lib.axi_read_slave
     generic map (
-        axi_slave => axi_slave
+        axi_slave => axil_slave
     )
     port map (
-        aclk    => aclk,
-        arvalid => arvalid,
-        arready => arready,
-        arid    => arid,
-        araddr  => araddr,
-        arlen   => arlen,
-        arsize  => arsize,
-        arburst => arburst,
-        rvalid  => rvalid,
-        rready  => rready,
-        rid     => rid,
-        rdata   => rdata,
-        rresp   => rresp,
-        rlast   => rlast
+        aclk    => clk,
+        arvalid => axil_s_req.arvalid,
+        arready => axil_s_resp.arready,
+        arid    => X"00",
+        araddr  => axil_s_req.araddr,
+        arlen   => X"00",
+        arsize  => B"010", -- 4 bytes
+        arburst => B"01", -- INCR
+        rvalid  => axil_s_resp.rvalid,
+        rready  => axil_s_req.rready,
+        rid     => rid_dummy,
+        rdata   => axil_s_resp.rdata,
+        rresp   => axil_s_resp.rresp,
+        rlast   => rlast_dummy
     );
 
-    u_axi_write_slave : axi_write_slave
+
+    u_axi_write_slave: entity vunit_lib.axi_write_slave
     generic map (
-        axi_slave => axi_slave
+        axi_slave => axil_slave
     )
     port map (
-        aclk    => aclk,
-        awvalid => awvalid,
-        awready => awready,
-        awid    => awid,
-        awaddr  => awaddr,
-        awlen   => awlen,
-        awsize  => awsize,
-        awburst => awburst,
-        wvalid  => wvalid,
-        wready  => wready,
-        wdata   => wdata,
-        wstrb   => wstrb,
-        wlast   => wlast,
-        bvalid  => bvalid,
-        bready  => bready,
-        bid     => bid,
-        bresp   => bresp
+        aclk    => clk,
+        awvalid => axil_s_req.awvalid,
+        awready => axil_s_resp.awready,
+        awid    => X"00",
+        awaddr  => axil_s_req.awaddr,
+        awlen   => X"00",
+        awsize  => B"010", -- 4 bytes
+        awburst => B"01", -- INCR
+        wvalid  => axil_s_req.wvalid,
+        wready  => axil_s_resp.wready,
+        wdata   => axil_s_req.wdata,
+        wstrb   => axil_s_req.wstrb,
+        wlast   => '1',
+        bvalid  => axil_s_resp.bvalid,
+        bready  => axil_s_req.bready,
+        bid     => bid_dummy,
+        bresp   => axil_s_resp.bresp
     );
 
 
