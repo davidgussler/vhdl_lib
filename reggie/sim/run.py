@@ -17,10 +17,12 @@ vu.add_osvvm()
 lib = vu.add_library("lib")
 lib.add_source_files("./../../utils/hdl/gen_utils_pkg.vhd")
 lib.add_source_files("./../../skid_buff/hdl/skid_buff.vhd")
-lib.add_source_files("./../../axil/hdl/axil_to_bus.vhd")
+lib.add_source_files("./../../axi/hdl/axil_to_bus.vhd")
+lib.add_source_files("./../../axi/hdl/axil_pipe.vhd")
 lib.add_source_files("./../hdl/*.vhd")
 lib.add_source_files("./../examples/*.vhd")
 lib.add_source_files("./examp_regs_tb.vhd")
+lib.add_source_files("./axi_examp_regs_tb.vhd")
 
 # Debugging visibility 
 lib.set_compile_option("modelsim.vcom_flags", ["+acc",  "-O0"])
