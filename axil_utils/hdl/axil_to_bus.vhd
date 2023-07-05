@@ -31,10 +31,10 @@
 -- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 -- #  POSSIBILITY OF SUCH DAMAGE.
 -- # ===========================================================================
--- # This module converts an AXI interface to a simplified bus interface to 
+-- # This module translates an AXI interface to a simplified bus interface to 
 -- # make downstream user logic simpler by abstracting away the complexities of 
 -- # AXI. It is able to maintain 100% thruput as long as 
--- # the master doesnt stall and the master sets a valid write address and write 
+-- # the master doesn't stall and the master sets a valid write address and write 
 -- # data on the same cycle. No bubble cycles inserted here.
 -- #
 -- # This module addds no latency or pipelining. If that is needed to ease timing,
@@ -84,7 +84,7 @@ begin
     -- Write Address
     u_aw_skid_buff : entity work.skid_buff
     generic map (
-        G_WIDTH    => 32,
+        G_WIDTH    => i_s_axil.awaddr'LENGTH,
         G_REG_OUTS => FALSE
     )
     port map (
@@ -103,7 +103,7 @@ begin
     -- Write Data
     u_w_skid_buff : entity work.skid_buff
     generic map (
-        G_WIDTH    => 32,
+        G_WIDTH    => i_s_axil.wdata'LENGTH,
         G_REG_OUTS => FALSE
     )
     port map (
@@ -190,8 +190,8 @@ begin
     end process;
     -- Always respond with OKAY
     o_s_axil.rresp <= AXI_RESP_OKAY; 
-
     o_s_axil.rdata <= i_m_bus.rdata;
+    
     o_m_bus.ren <= rd_en; 
     o_m_bus.raddr <= araddr;
 
