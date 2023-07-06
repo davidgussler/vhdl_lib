@@ -13,10 +13,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let args = Args::parse();
     let rm: RegMap = parse_json(&args.json_file)?;
 
-    println!("{:#?}", rm);
-
-    println!("json: {:?}", args.json_file);
-    println!("vhdl: {:?}", args.vhdl);
+    if args.vhdl {
+        gen_vhdl(&rm);
+    }
 
 
     Ok(())
@@ -76,7 +75,7 @@ struct Field {
     bit_width: u32,
     bit_offset: u32,
     reset_value: Option<String>, // hex - optional (default to 0 if not present)
-    enum_desc: Option<Vec<EnumDesc>>
+    enums: Option<Vec<EnumDesc>>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -221,76 +220,6 @@ const C_KEYWORDS: &'static [&'static str] = &[
     "unsigned", 
 ];
 
-/* 
-const VALID_START_CHARS: &'static [char] = &[
-    'a', 
-    'b', 
-    'c', 
-    'd', 
-    'e', 
-    'f', 
-    'g', 
-    'h', 
-    'i', 
-    'j', 
-    'k', 
-    'l', 
-    'm', 
-    'n', 
-    'o', 
-    'p', 
-    'q', 
-    'r', 
-    's', 
-    't', 
-    'u', 
-    'v', 
-    'w', 
-    'x', 
-    'y', 
-    'z', 
-];
-
-const VALID_CHARS: &'static [char] = &[
-    'a', 
-    'b', 
-    'c', 
-    'd', 
-    'e', 
-    'f', 
-    'g', 
-    'h', 
-    'i', 
-    'j', 
-    'k', 
-    'l', 
-    'm', 
-    'n', 
-    'o', 
-    'p', 
-    'q', 
-    'r', 
-    's', 
-    't', 
-    'u', 
-    'v', 
-    'w', 
-    'x', 
-    'y', 
-    'z', 
-    '0', 
-    '1', 
-    '2', 
-    '3', 
-    '4', 
-    '5', 
-    '6', 
-    '7', 
-    '8', 
-    '9', 
-    '_', 
-];
-*/
 
 
 /*
@@ -315,82 +244,16 @@ fn check_valid_identifier(identifier: &str) -> Result<(), Box<dyn error::Error>>
     let id_lower = identifier.to_ascii_lowercase();
 
     let first = id_lower.chars().next().unwrap(); 
-    match first {
-        'a' | 
-        'b' | 
-        'c' | 
-        'd' | 
-        'e' | 
-        'f' | 
-        'g' | 
-        'h' | 
-        'i' | 
-        'j' | 
-        'k' | 
-        'l' | 
-        'm' | 
-        'n' | 
-        'o' | 
-        'p' | 
-        'q' | 
-        'r' | 
-        's' | 
-        't' | 
-        'u' | 
-        'v' | 
-        'w' | 
-        'x' | 
-        'y' | 
-        'z' => (),
-        _ => {
-            let msg = format!("identifier '{}' starts with an invalid character '{}'", identifier, first);
-            Err(msg)?
-        },
+
+    if !first.is_ascii_lowercase() {
+        let msg = format!("identifier '{}' starts with an invalid character '{}'", identifier, first);
+        Err(msg)?
     }
 
     for id_char in id_lower.chars() {
-        match id_char {
-            'a' |
-            'b' |
-            'c' |
-            'd' |
-            'e' |
-            'f' |
-            'g' |
-            'h' |
-            'i' |
-            'j' |
-            'k' |
-            'l' |
-            'm' |
-            'n' |
-            'o' |
-            'p' |
-            'q' |
-            'r' |
-            's' |
-            't' |
-            'u' |
-            'v' |
-            'w' |
-            'x' |
-            'y' |
-            'z' |
-            '0' |
-            '1' |
-            '2' |
-            '3' |
-            '4' |
-            '5' |
-            '6' |
-            '7' |
-            '8' |
-            '9' |
-            '_' => (),
-            _ => {
-                let msg = format!("identifier '{}' contains an invalid character '{}'", identifier, id_char);
-                Err(msg)?
-            },
+        if !(id_char.is_ascii_lowercase() || id_char.is_ascii_digit() || id_char == '_') {
+            let msg = format!("identifier '{}' contains an invalid character '{}'", identifier, id_char);
+            Err(msg)?
         }
     }
 
@@ -411,6 +274,57 @@ fn check_valid_identifier(identifier: &str) -> Result<(), Box<dyn error::Error>>
     Ok(())
 }
 
+
+fn as_int(num: &str) -> i64 {
+
+}
+
+fn check_valid_numeric(num: &str) -> Result<(), Box<dyn error::Error>> {
+
+    if num.is_empty() {
+        return Err("numeric is empty")?;
+    }
+
+    let mut num_iter = num.chars();
+    let first = num_iter.next().unwrap(); 
+    let second = num_iter.next().unwrap(); 
+
+    if first == '0' && second == 'x' {
+        for c in num_iter {
+            if !c.is_ascii_hexdigit() {
+                let msg = format!("hex numeric '{}' contains an invalid character '{}' ", num, c);
+                Err(msg)?;
+            }
+        }
+    } else {
+        for c in num.chars() {
+            if !c.is_ascii_digit() {
+                let msg = format!("decimal numeric '{}' contains an invalid character '{}' ", num, c);
+                Err(msg)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+
+// TODO: remove the first two line of this function
+// make it an impl of the RegMap struct
+// takes self as input param
+// also need to make a "new::" constructor function
+// this constructor function will be the first two lines of this current func
+// rename it to check_regmap 
+//
+// I've added checks that validate syntax, next need to add checks that 
+// validate logic. for example: reset val can't use more bits than data_width
+// addresses can't be repeated - especially need to check this for register arrays
+// enum values can't be repeated
+// enum values must fit within their bit boundries
+// fields can't overlap
+// fields can't overflow outside of the register
+// no identifiers can be identical at the same level of hiearchy
+// 
 fn parse_json(json_file: &path::PathBuf) -> Result<RegMap, Box<dyn error::Error>> {
     let contents = fs::read_to_string(&json_file)?;
     let rm: RegMap = serde_json::from_str(&contents)?;
@@ -420,7 +334,50 @@ fn parse_json(json_file: &path::PathBuf) -> Result<RegMap, Box<dyn error::Error>
         Err(msg)?
     }
 
+    if rm.addr_width > 32 {
+        let msg = format!("reggie currently only supports a maximum addr_width of 32");
+        Err(msg)?
+    }
+
+    if rm.data_width != 32 {
+        let msg = format!("reggie currently only supports data_width of 32");
+        Err(msg)?
+    }
+
     check_valid_identifier(&rm.name)?;
+
+    for reg in rm.regs.iter() {
+        check_valid_identifier(&reg.name)?;
+
+        match reg.access.as_str() {
+            "RW" | "RO" | "RWV" => (),
+            _ => {
+                let msg = format!("\"{}\" is an unkown access type. please use \"RW\", \"RO\", or \"RWV\"", &reg.access);
+                Err(msg)?
+            }
+        }
+
+        check_valid_numeric(&reg.addr_offset)?;
+
+        for field in &reg.fields {
+
+            check_valid_identifier(&field.name)?;
+
+            match &field.reset_value {
+                Some(r) => check_valid_numeric(r)?,
+                None => ()
+            }
+
+            match &field.enums {
+                Some(e) => {
+                    for enu in e {
+                        check_valid_numeric(&enu.value)?;
+                    } 
+                },
+                None => (),
+            }
+        }
+    }
     
 
     Ok(rm)
@@ -428,7 +385,7 @@ fn parse_json(json_file: &path::PathBuf) -> Result<RegMap, Box<dyn error::Error>
 
 
 
-fn gen_vhdl(rm: RegMap) {
+fn gen_vhdl(rm: &RegMap) {
 
 }
 
