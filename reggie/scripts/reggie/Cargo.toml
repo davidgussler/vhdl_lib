@@ -2,7 +2,8 @@
 name = "reggie"
 version = "0.1.0"
 edition = "2021"
-authors = ["dgussler"]
+authors = ["David Gussler"]
+description = "reggie - an FPGA register manager"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,3 +11,4 @@ authors = ["dgussler"]
 clap = { version = "4.3.3", features = ["derive"] }
 serde = { version="1.0.164", features=["derive"] }
 serde_json = "1.0.96"
+thiserror = "1.0.41"

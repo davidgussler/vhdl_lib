@@ -3,12 +3,12 @@
     "desc": "Description of this example register map",
     "addr_width": 8,
     "data_width": 32, 
-    "version": "0.1.0",
+    "reggie_version": "0.1.0",
     "regs": [
         {
             "name": "reg0",
             "desc": "This is an example of a RW register",
-            "access": "CTL",
+            "access": "RW",
             "addr_offset": "0x0",
             "fields": [
                 {
@@ -42,7 +42,7 @@
             "desc": "This is an example of a RW register array",
             "array": true,
             "array_length": 2,
-            "access": "CTL",
+            "access": "RW",
             "addr_offset": "0x4",
             "fields": [
                 {
@@ -63,7 +63,7 @@
         {
             "name": "reg2",
             "desc": "This is an example of a RO register",
-            "access": "STS",
+            "access": "RO",
             "addr_offset": "0xC",
             "fields": [
                 {
@@ -76,33 +76,15 @@
         },
         {
             "name": "reg3",
-            "desc": "This is an example of a RW1C register",
-            "access": "IRQ",
-            "addr_offset": "0x10",
+            "desc": "This is an example of a RWV register",
+            "access": "RWV",
+            "addr_offset": "0x68",
             "fields": [
                 {
-                    "name": "irq0",
-                    "desc": "Description of irq0",
-                    "bit_width": 1,
+                    "name": "fld0",
+                    "desc": "Description of fld0",
+                    "bit_width": 24,
                     "bit_offset": 0
-                },
-                {
-                    "name": "irq1",
-                    "desc": "Description of irq0",
-                    "bit_width": 1,
-                    "bit_offset": 1
-                },
-                {
-                    "name": "irq2",
-                    "desc": "Description of irq0",
-                    "bit_width": 1,
-                    "bit_offset": 2
-                },
-                {
-                    "name": "irq3",
-                    "desc": "Description of irq0",
-                    "bit_width": 1,
-                    "bit_offset": 3
                 }
             ]
         }

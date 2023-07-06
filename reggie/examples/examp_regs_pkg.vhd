@@ -70,10 +70,6 @@ package examp_regs_pkg is
         reg3 : examp_regs_reg3_fld_t; 
     end record;
 
-    -- constant EXAMP_REGS_STS_DEFAULT : examp_regs_sts_t := (
-    --     reg2 => 
-    -- )
-
     -- -------------------------------------------------------------------------
     -- Read indication pulses
     -- -------------------------------------------------------------------------
