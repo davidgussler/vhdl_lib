@@ -11,12 +11,13 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let args = Args::parse();
-    let rm: RegMap = parse_json(&args.json_file)?;
+    let json_str = fs::read_to_string(&args.json_file)?;
+    let rm: RegMap = serde_json::from_str(&json_str)?;
+    check_regmap(&rm)?;
 
     if args.vhdl {
         gen_vhdl(&rm);
     }
-
 
     Ok(())
 }
@@ -235,6 +236,17 @@ pub enum ReggieError {
 }
 */
 
+
+/// Convert a hex/dec string into an integer
+fn as_int(num: &str) -> i64 {
+    todo!();
+}
+
+/// convert a hex/dec string into a vhdl slv format
+fn as_vhdl_slv(num: &str) -> String {
+    todo!();
+}
+
 fn check_valid_identifier(identifier: &str) -> Result<(), Box<dyn error::Error>> {
 
     if identifier.is_empty() {
@@ -275,10 +287,6 @@ fn check_valid_identifier(identifier: &str) -> Result<(), Box<dyn error::Error>>
 }
 
 
-fn as_int(num: &str) -> i64 {
-
-}
-
 fn check_valid_numeric(num: &str) -> Result<(), Box<dyn error::Error>> {
 
     if num.is_empty() {
@@ -291,14 +299,14 @@ fn check_valid_numeric(num: &str) -> Result<(), Box<dyn error::Error>> {
 
     if first == '0' && second == 'x' {
         for c in num_iter {
-            if !c.is_ascii_hexdigit() {
+            if !(c.is_ascii_hexdigit() || c == '_') {
                 let msg = format!("hex numeric '{}' contains an invalid character '{}' ", num, c);
                 Err(msg)?;
             }
         }
     } else {
         for c in num.chars() {
-            if !c.is_ascii_digit() {
+            if !(c.is_ascii_digit() || c == '_') {
                 let msg = format!("decimal numeric '{}' contains an invalid character '{}' ", num, c);
                 Err(msg)?;
             }
@@ -309,12 +317,21 @@ fn check_valid_numeric(num: &str) -> Result<(), Box<dyn error::Error>> {
 }
 
 
+// impl RegMap {
+//     pub fn new(json_str: &str) -> Self {
+//         let rm: RegMap = serde_json::from_str(&contents)?;
+//     }
+// }
+
+
+
 // TODO: remove the first two line of this function
 // make it an impl of the RegMap struct
 // takes self as input param
 // also need to make a "new::" constructor function
 // this constructor function will be the first two lines of this current func
 // rename it to check_regmap 
+// Actually, the constructor could fail since from_str could fail -> we can't do this
 //
 // I've added checks that validate syntax, next need to add checks that 
 // validate logic. for example: reset val can't use more bits than data_width
@@ -325,9 +342,9 @@ fn check_valid_numeric(num: &str) -> Result<(), Box<dyn error::Error>> {
 // fields can't overflow outside of the register
 // no identifiers can be identical at the same level of hiearchy
 // 
-fn parse_json(json_file: &path::PathBuf) -> Result<RegMap, Box<dyn error::Error>> {
-    let contents = fs::read_to_string(&json_file)?;
-    let rm: RegMap = serde_json::from_str(&contents)?;
+// TODO: support for "12345", "0x2BCD", "0b1100_00110"
+// need to add support for binary data types
+fn check_regmap(rm: &RegMap) -> Result<(), Box<dyn error::Error>> {
 
     if rm.reggie_version != VERSION {
         let msg = format!("input register map file expects version {} of reggie, but this executable is version {}", rm.reggie_version, VERSION);
@@ -378,14 +395,12 @@ fn parse_json(json_file: &path::PathBuf) -> Result<RegMap, Box<dyn error::Error>
             }
         }
     }
-    
 
-    Ok(rm)
+    Ok(())
 }
 
 
-
-fn gen_vhdl(rm: &RegMap) {
-
+fn gen_vhdl(rm: &RegMap) -> String {
+    todo!();
 }
 
