@@ -21,11 +21,11 @@
                     "enums": [
                         {
                             "desc": "on",
-                            "value": "0x1"
+                            "value": "1"
                         },
                         {
                             "desc": "off",
-                            "value": "0x0"
+                            "value": "0"
                         }
                     ]
                 },
