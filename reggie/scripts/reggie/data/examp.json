@@ -8,6 +8,7 @@
         {
             "name": "reg0",
             "desc": "This is an example of a RW register",
+            "long_desc": "This is an example of a RW register. This is the long description for this register. As you can clearly see, this verbose description is much more wordy than the regular description, and it is allowed to span many lines.",
             "access": "RW",
             "addr_offset": "0x0",
             "fields": [

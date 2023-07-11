@@ -42,9 +42,13 @@ struct Args {
     #[arg(short, long)]
     c_drivers: bool,
 
-    /// Generate bitfield documentation
+    /// Generate markdown documentation
     #[arg(short, long)]
-    bitfield: bool,
+    markdown: bool,
+
+    /// Generate html documentation
+    #[arg(short, long)]
+    html: bool,
 }
 
 
@@ -359,7 +363,7 @@ fn check_regmap(rm: &RegMap) -> Result<(), Box<dyn error::Error>> {
     if rm.data_width != 32 {
         let msg = format!("reggie currently only supports data_width of 32");
         Err(msg)?
-    }
+    } 
 
     check_valid_identifier(&rm.name)?;
 
