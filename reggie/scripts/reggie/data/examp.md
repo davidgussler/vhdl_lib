@@ -18,7 +18,8 @@ This is the long description for this register map. As you can clearly see, this
 | --- | --- | --- | --- | --- |
 | reg0 | 1 | 0x0 | RW | This is an example of a RW register
 | reg1 | 2 | 0x4 -> 0x8 | RW | This is an example of a RW register array
-
+| reg2 | 1 | 0xC | RO | This is an example of an RO register
+| reg3 | 1 | 0x68 | RWV | This is an example of a RWV register
 
 ## reg0
 
