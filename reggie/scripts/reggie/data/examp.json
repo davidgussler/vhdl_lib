@@ -1,6 +1,7 @@
 {
     "name": "examp_regs",
     "desc": "Description of this example register map",
+    "long_desc": "This is the long description for this register map. As you can clearly see, this verbose description is much more wordy than the regular description, and it is allowed to span many lines. It is optional to add this, but highly recommended.",
     "addr_width": 8,
     "data_width": 32, 
     "reggie_version": "0.1.0",
@@ -8,7 +9,7 @@
         {
             "name": "reg0",
             "desc": "This is an example of a RW register",
-            "long_desc": "This is an example of a RW register. This is the long description for this register. As you can clearly see, this verbose description is much more wordy than the regular description, and it is allowed to span many lines.",
+            "long_desc": "This is the long description for this register. As you can clearly see, this verbose description is much more wordy than the regular description, and it is allowed to span many lines.",
             "access": "RW",
             "addr_offset": "0x0",
             "fields": [
@@ -48,7 +49,6 @@
             "fields": [
                 {
                     "name": "fld0",
-                    "desc": "Description of fld0",
                     "bit_width": 1,
                     "bit_offset": 0
                 },
@@ -63,7 +63,7 @@
         },
         {
             "name": "reg2",
-            "desc": "This is an example of a RO register",
+            "desc": "This is an example of an RO register",
             "access": "RO",
             "addr_offset": "0xC",
             "fields": [
@@ -85,7 +85,8 @@
                     "name": "fld0",
                     "desc": "Description of fld0",
                     "bit_width": 24,
-                    "bit_offset": 0
+                    "bit_offset": 0,
+                    "reset_value": "0x23_ABCD"
                 }
             ]
         }

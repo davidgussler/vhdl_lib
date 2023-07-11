@@ -68,6 +68,7 @@ struct Reg {
     array_length: Option<u32>, // optional, but required if array is present
     name: String, // must only have valid VHDL characters. need to check for keywords in c, rust, and vhdl. must ber less than a certian number of characters too.
     desc: Option<String>,
+    long_desc: Option<String>,
     access: String, // "RW", "RO", "RWV"
     addr_offset: String, // hex - well... first support hex only, then move to supporting binary/decimal
     fields: Vec<Field>
