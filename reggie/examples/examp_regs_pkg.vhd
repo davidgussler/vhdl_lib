@@ -31,18 +31,18 @@ package examp_regs_pkg is
     constant EXAMP_REGS_NUM_REGS : positive := 5;
     constant EXAMP_REGS_ADDR_BITS : positive := 8;
     constant EXAMP_REGS_ADDRS : slv_array_t(EXAMP_REGS_NUM_REGS-1 downto 0)(EXAMP_REGS_ADDR_BITS-1 downto 0) := (
-        0 => X"00",
-        1 => X"04",
-        2 => X"08",
-        3 => X"0C",
-        4 => X"68"
+        X"00",
+        X"04",
+        X"08",
+        X"0C",
+        X"68"
     ); 
     constant EXAMP_REGS_RST_VALS : slv_array_t(EXAMP_REGS_NUM_REGS-1 downto 0)(31 downto 0) := (
-        0 => X"0000_1234",
-        1 => X"0000_0000",
-        2 => X"0000_0000",
-        3 => X"0000_0000",
-        4 => X"0000_0000"
+        X"0000_1234",
+        X"0000_0000",
+        X"0000_0000",
+        X"0000_0000",
+        X"0000_0000"
     );
 
     -- -------------------------------------------------------------------------

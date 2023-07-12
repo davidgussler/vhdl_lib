@@ -249,7 +249,7 @@ pub enum ReggieError {
 
 /// Convert a hex/dec/binary string into a Rust integer
 /// ONLY UNSIGNED VALUES
-fn to_u32(num: &str) -> Result<u32, Box<dyn std::error::Error> > {
+fn to_u32(num: &str) -> u32 {
     let mut num_iter = num.chars();
     
     let first = match num_iter.next() {
@@ -264,14 +264,14 @@ fn to_u32(num: &str) -> Result<u32, Box<dyn std::error::Error> > {
 
     let rtn: u32; 
     if first == '0' && second == 'x' { // Hex
-        rtn = u32::from_str_radix(num_iter.collect::<String>().as_str(), 16)?;
+        rtn = u32::from_str_radix(num_iter.collect::<String>().as_str(), 16).unwrap();
     } else if first == '0' && second == 'b' { // Binary
-        rtn = u32::from_str_radix(num_iter.collect::<String>().as_str(), 2)?;
+        rtn = u32::from_str_radix(num_iter.collect::<String>().as_str(), 2).unwrap();
     } else { // Decimal
-        rtn = u32::from_str_radix(num, 10)?;
+        rtn = u32::from_str_radix(num, 10).unwrap();
     }
 
-    Ok(rtn)
+    rtn
 
     // Error if the number cannot fit into an u32 (the type of the return result)
 }
@@ -623,7 +623,52 @@ package examp_regs_pkg is
 
     s.push_str(&format!("{header}{libraries}"));
 
-    // TODO:
+    // TODO: 
+
+    let name_up = rm.name.to_ascii_uppercase();
+
+    let num_regs: u32 = rm.regs // yay I did something rusty
+        .iter()
+        .map(|r| r.array_length.unwrap_or_else(|| 1 ))
+        .sum();
+
+    s.push_str(&format!("    constant {}_NUM_REGS : positive := {};\n", name_up, num_regs));
+    s.push_str(&format!("    constant {}_ADDR_BITS : positive := {};\n", name_up, rm.addr_width));
+    s.push_str(&format!("    constant {}_ADDRS : slv_array_t({}_NUM_REGS-1 downto 0)({}_ADDR_BITS-1 downto 0) := (\n", name_up, name_up, name_up));
+    
+    // Set up addresses
+    let mut reg_num = 0; 
+    for r in rm.regs.iter() {
+        let array_length = r.array_length.unwrap_or_else(|| 1 ); 
+        let mut addr_offset = to_u32(&r.addr_offset);
+        for _ in 1..=array_length {
+            s.push_str(&format!("        {} => {},\n", reg_num, to_vhdl_slv(addr_offset , rm.addr_width).unwrap()));
+            addr_offset += rm.data_width / 8; 
+            reg_num += 1;
+        }
+    }
+    s.pop(); // retroactively remove the last unwanted comma
+    s.pop();
+    s.push_str("\n    );\n");
+
+    /*
+    // Set up reset values
+    s.push_str(&format!("    constant {}_RST_VALS : slv_array_t({}_NUM_REGS-1 downto 0)({} downto 0) := (\n", name_up, name_up, rm.data_width-1));
+    let mut reg_num = 0; 
+    for r in rm.regs.iter() {
+        let array_length = r.array_length.unwrap_or_else(|| 1 ); 
+
+        let mut reset_val = ?????; // TODO: Need to determine full reset value for the reg from the individual fields
+
+        for _ in 1..=array_length {
+            s.push_str(&format!("        {} => {},\n", reg_num, to_vhdl_slv(reset_val , rm.data_width).unwrap()));
+            reg_num += 1;
+        }
+    }
+    s.pop(); // retroactively remove the last unwanted comma
+    s.pop();
+    s.push_str("\n    );\n");
+    */
 
     s.push_str("end package;\n");
     s
