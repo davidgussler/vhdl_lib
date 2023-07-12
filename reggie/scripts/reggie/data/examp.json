@@ -64,7 +64,7 @@
             "name": "reg2",
             "desc": "This is an example of an RO register",
             "access": "RO",
-            "addr_offset": "0xC",
+            "addr_offset": "0b1100",
             "fields": [
                 {
                     "name": "fld0",

@@ -11,6 +11,7 @@ This is the long description for this register map. As you can clearly see, this
 | Data Width | 32 |
 | Address Width | 8 |
 | Reggie Version | 0.1.0 |
+| Generated on | 
 
 ### examp_regs Summary
 

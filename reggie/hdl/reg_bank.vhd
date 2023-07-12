@@ -71,13 +71,13 @@ entity reg_bank is
         G_NUM_REGS : positive := 16;
 
         -- Number of address bits to use
-        G_ADR_BITS : positive range 2 to 32 := 8;
+        G_ADDR_BITS : positive range 2 to 32 := 8;
 
         -- Address of each register
-        G_REG_ADR : slv_array_t(G_NUM_REGS-1 downto 0)(G_ADR_BITS-1 downto 0);
+        G_ADDRS : slv_array_t(G_NUM_REGS-1 downto 0)(G_ADDR_BITS-1 downto 0);
 
         -- Register reset values
-        G_REG_RST_VAL : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0)
+        G_RST_VALS : slv_array_t(G_NUM_REGS-1 downto 0)(31 downto 0)
     );
     port(
         i_clk : in std_logic;
@@ -109,19 +109,19 @@ begin
 
         -- Legal write transaction
         bus_wr(i) <= '1' when i_s_bus.wen = '1' and 
-            i_s_bus.waddr(G_ADR_BITS-1 downto 0) = G_REG_ADR(i)
+            i_s_bus.waddr(G_ADDR_BITS-1 downto 0) = G_ADDRS(i)
             else '0';
                 
         -- Legal read transaction
         bus_rd(i) <= '1' when i_s_bus.ren = '1' and 
-            i_s_bus.raddr(G_ADR_BITS-1 downto 0) = G_REG_ADR(i) 
+            i_s_bus.raddr(G_ADDR_BITS-1 downto 0) = G_ADDRS(i) 
             else '0';
         
         -- Bus writes
         process (i_clk) begin
             if rising_edge(i_clk) then
                 if i_rst then
-                    o_ctl(i) <= G_REG_RST_VAL(i); 
+                    o_ctl(i) <= G_RST_VALS(i); 
                 elsif bus_wr(i) then
                     o_ctl(i) <= i_s_bus.wdata; 
                 end if; 
