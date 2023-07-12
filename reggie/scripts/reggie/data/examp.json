@@ -21,11 +21,11 @@
                     "reset_value": "0x0",
                     "enums": [
                         {
-                            "desc": "on",
+                            "name": "on",
                             "value": "1"
                         },
                         {
-                            "desc": "off",
+                            "name": "off",
                             "value": "0"
                         }
                     ]
@@ -42,15 +42,14 @@
         {
             "name": "reg1",
             "desc": "This is an example of a RW register array",
-            "array": true,
             "array_length": 2,
             "access": "RW",
             "addr_offset": "0x4",
             "fields": [
                 {
                     "name": "fld0",
-                    "bit_width": 1,
-                    "bit_offset": 0
+                    "bit_width": 2,
+                    "bit_offset": 2
                 },
                 {
                     "name": "fld1",

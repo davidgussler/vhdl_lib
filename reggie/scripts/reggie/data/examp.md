@@ -1,10 +1,10 @@
 # examp_regs Register Map
 
-### Description of this example register map
+#### Description of this example register map
 
 This is the long description for this register map. As you can clearly see, this verbose description is much more wordy than the regular description, and it is allowed to span many lines. It is optional to add this, but highly recommended.  
 
-### Register Map Settings
+### examp_regs Attributes
 
 |  |  |
 | --- | --- |
@@ -12,22 +12,24 @@ This is the long description for this register map. As you can clearly see, this
 | Address Width | 8 |
 | Reggie Version | 0.1.0 |
 
-### Registers Summary
+### examp_regs Summary
 
 | Register Name | Array | Address Offset | Access | Description |
 | --- | --- | --- | --- | --- |
 | reg0 | 1 | 0x0 | RW | This is an example of a RW register
-| reg1 | 2 | 0x4 -> 0x8 | RW | This is an example of a RW register array
+| reg1 | 2 | 0x4 to 0x8 | RW | This is an example of a RW register array
 | reg2 | 1 | 0xC | RO | This is an example of an RO register
 | reg3 | 1 | 0x68 | RWV | This is an example of a RWV register
 
 ## reg0
 
-### This is an example of a RW register
+#### This is an example of a RW register
 
 This is the long description for this 
 register. As you can clearly see, this verbose description is much more wordy 
 than the regular description, and it is allowed to span many lines.
+
+### reg0 Attributes
 
 |  |  |
 | --- | --- |
@@ -35,15 +37,19 @@ than the regular description, and it is allowed to span many lines.
 | Address Offset | 0x0 |
 | Access | RW |
 
-| 31:9 | 8:5 | 4:1 | 0 |
+### reg0 Bitfield
+
+| 31:12 | 11:8 | 7:1 | 0 |
 | --- | --- | --- | --- |
 | - | fld1 | - | fld0 |
 
-| Bits | Field Name | Reset Value | Description
+### reg0 Fields
+
+| Bits | Field Name | Reset Value | Description |
 | --- | --- | --- | --- |
-| 31:9 | - | - | - |
-| 8:5 | fld1 | 0 | Description of fld1<br>on: 1<br>off: 0 |
-| 4:1 | - | - | - |
+| 31:12 | - | - | - |
+| 11:8 | fld1 | 0 | Description of fld1<br>on: 1<br>off: 0 |
+| 7:1 | - | - | - |
 | 0 | fld0 | 0 | Description of fld0 |
 
 
@@ -54,7 +60,7 @@ than the regular description, and it is allowed to span many lines.
 |  |  |
 | --- | --- |
 | Array | 2 | 
-| Address Offset | 0x4 -> 0x8 |
+| Address Offset | 0x4 to 0x8 |
 | Access | RW |
 
 | 31:16 | 15:8 | 7:1 | 0 |
