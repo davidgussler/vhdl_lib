@@ -7,22 +7,22 @@ use work.gen_utils_pkg.all;
 use work.examp_regs_pkg.all; 
 
 entity axi_examp_regs is
-    port (
-        i_clk : in std_logic;
-        i_rst : in std_logic;
+port (
+    i_clk : in std_logic;
+    i_rst : in std_logic;
 
-        -- Bus Interface
-        i_s_axil : in  axil_req_t; 
-        o_s_axil : out axil_resp_t;
+    -- Bus Interface
+    i_s_axil : in  axil_req_t; 
+    o_s_axil : out axil_resp_t;
 
-        -- Register Interface
-        o_ctl : out examp_regs_ctl_t;
-        i_sts : in  examp_regs_sts_t;
+    -- Register Interface
+    o_ctl : out examp_regs_ctl_t;
+    i_sts : in  examp_regs_sts_t;
 
-        -- Register R/W Indication Interface
-        o_wr : out examp_regs_wr_t;
-        o_rd : out examp_regs_rd_t
-    );
+    -- Register R/W Indication Interface
+    o_wr : out examp_regs_wr_t;
+    o_rd : out examp_regs_rd_t
+);
 end entity;
 
 architecture rtl of axi_examp_regs is
@@ -34,25 +34,25 @@ begin
 
     u_axil_pipe : entity work.axil_pipe
     generic map (
-      G_NUM_STAGES => 1
+        G_NUM_STAGES => 1
     )
     port map (
-      i_clk    => i_clk,
-      i_rst    => i_rst,
-      i_s_axil => i_s_axil,
-      o_s_axil => o_s_axil,
-      i_m_axil => axil_resp_reg,
-      o_m_axil => axil_req_reg
+        i_clk    => i_clk,
+        i_rst    => i_rst,
+        i_s_axil => i_s_axil,
+        o_s_axil => o_s_axil,
+        i_m_axil => axil_resp_reg,
+        o_m_axil => axil_req_reg
     );
 
     u_axil_to_bus : entity work.axil_to_bus
     port map (
-      i_clk    => i_clk,
-      i_rst    => i_rst,
-      i_s_axil => axil_req_reg,
-      o_s_axil => axil_resp_reg,
-      i_m_bus  => bus_resp,
-      o_m_bus  => bus_req
+        i_clk    => i_clk,
+        i_rst    => i_rst,
+        i_s_axil => axil_req_reg,
+        o_s_axil => axil_resp_reg,
+        i_m_bus  => bus_resp,
+        o_m_bus  => bus_req
     );
   
     u_examp_regs : entity work.examp_regs

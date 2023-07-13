@@ -31,32 +31,32 @@ package examp_regs_pkg is
     constant EXAMP_REGS_NUM_REGS : positive := 5;
     constant EXAMP_REGS_ADDR_BITS : positive := 8;
     constant EXAMP_REGS_ADDRS : slv_array_t(EXAMP_REGS_NUM_REGS-1 downto 0)(EXAMP_REGS_ADDR_BITS-1 downto 0) := (
-        X"00",
-        X"04",
-        X"08",
-        X"0C",
-        X"68"
+        0 => X"00",
+        1 => X"04",
+        2 => X"08",
+        3 => X"0C",
+        4 => X"68"
     ); 
     constant EXAMP_REGS_RST_VALS : slv_array_t(EXAMP_REGS_NUM_REGS-1 downto 0)(31 downto 0) := (
-        X"0000_1234",
-        X"0000_0000",
-        X"0000_0000",
-        X"0000_0000",
-        X"0000_0000"
+        0 => X"0000_0A00",
+        1 => X"0000_0000",
+        2 => X"0000_0000",
+        3 => X"0000_0000",
+        4 => X"0023_ABCD"
     );
 
     -- -------------------------------------------------------------------------
-    -- RW Register Fields
+    -- Register Fields
     -- -------------------------------------------------------------------------
-    -- Desc: My first control register 
-    -- Access: RW
+    -- My first control register 
     -- Offset: 0x00
+    -- Access: RW
     type examp_regs_reg0_fld_t is record 
         fld0 : std_logic; -- Desc
         fld1 : std_logic_vector(3 downto 0); -- Desc
     end record;
 
-    -- Desc: My first array of control registers
+    -- My first array of control registers
     -- Access: RW
     -- Offset: 0x04 to 0x04+4*1
     type examp_regs_reg1_arr_fld_t is record
@@ -65,20 +65,14 @@ package examp_regs_pkg is
     end record;
     type examp_regs_reg1_arr_fld_array_t is array (natural range 0 to 1) of examp_regs_reg1_arr_fld_t;
 
-    -- -------------------------------------------------------------------------
-    -- RO Register Fields
-    -- -------------------------------------------------------------------------
-    -- Desc: My first status register 
+    -- My first status register 
     -- Access: RO
     -- Offset: 0x0C
     type examp_regs_reg2_fld_t is record 
         fld0 : std_logic_vector(31 downto 0); -- Desc
     end record;
 
-    -- -------------------------------------------------------------------------
-    -- RWV Register Fields
-    -- -------------------------------------------------------------------------
-    -- Desc: My first volitile register 
+    -- My first volitile register 
     -- Access: RWV
     -- Offset: 0x68
     type examp_regs_reg3_fld_t is record 

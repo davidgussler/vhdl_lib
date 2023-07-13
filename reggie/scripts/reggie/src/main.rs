@@ -250,17 +250,11 @@ pub enum ReggieError {
 /// Convert a hex/dec/binary string into a Rust integer
 /// ONLY UNSIGNED VALUES
 fn to_u32(num: &str) -> u32 {
-    let mut num_iter = num.chars();
-    
-    let first = match num_iter.next() {
-        Some(n) => n,
-        None => ' ',
-    };
+    let num: String = num.replace("_", ""); // Remove underscores
 
-    let second = match num_iter.next() {
-        Some(n) =>  n,
-        None => ' ',
-    };
+    let mut num_iter = num.chars();
+    let first = num_iter.next().unwrap_or_else(|| ' ');
+    let second = num_iter.next().unwrap_or_else(|| ' ');
 
     let rtn: u32; 
     if first == '0' && second == 'x' { // Hex
@@ -268,12 +262,10 @@ fn to_u32(num: &str) -> u32 {
     } else if first == '0' && second == 'b' { // Binary
         rtn = u32::from_str_radix(num_iter.collect::<String>().as_str(), 2).unwrap();
     } else { // Decimal
-        rtn = u32::from_str_radix(num, 10).unwrap();
+        rtn = u32::from_str_radix(num.as_str(), 10).unwrap();
     }
 
     rtn
-
-    // Error if the number cannot fit into an u32 (the type of the return result)
 }
 
 /// Convert a rust integer into a vhdl slv
@@ -565,11 +557,63 @@ begin
         o_rd    => rd
     );
 
-", rm.name, name_up, name_up, name_up, name_up, name_up, name_up, name_up, name_up, name_up);
+", rm.name, name_up, name_up, name_up, name_up, rm.name, name_up, name_up, name_up, name_up);
 
     s.push_str(&format!("{header}{libraries}{entity}{arch_start}"));
 
-    // TODO:
+
+    let mut reg_num = 0; 
+    for r in rm.regs.iter() {
+        let array_length = r.array_length.unwrap_or_else(|| 1 );
+
+        s.push_str(&format!("    -- {} - {} - {}\n", r.name, r.addr_offset, r.access));
+        for al in 0..=array_length-1 {
+
+            let insert;
+            if array_length > 1 {
+                insert = format!("({})", al);
+            } else {
+                insert = "".to_string(); 
+            }
+
+            // Register IO
+            for f in r.fields.iter() {
+                let logic = match f.bit_width {
+                    1 => format!("{}", f.bit_offset),
+                    _ => format!("{} downto {}", f.bit_offset+f.bit_width-1, f.bit_offset),
+                };
+
+                match r.access.as_str() {
+                    "RW" => {
+                        s.push_str(&format!("    o_ctl.{}{}.{} <= ctl({})({});\n", r.name, insert, f.name, reg_num, logic));
+                        s.push_str(&format!("    sts({})({}) <= ctl({})({});\n", reg_num, logic, reg_num, logic));
+                    },
+                    "RO" => {
+                        s.push_str(&format!("    sts({})({}) <= i_sts.{}{}.{};\n", reg_num, logic, r.name, insert, f.name));
+                    },
+                    "RWV" => {
+                        s.push_str(&format!("    o_ctl.{}{}.{} <= ctl({})({});\n", r.name, insert, f.name, reg_num, logic));
+                        s.push_str(&format!("    sts({})({}) <= i_sts.{}{}.{};\n", reg_num, logic, r.name, insert, f.name));
+                    },
+                    _ => panic!("Illegal access type specified"),
+                }
+            }
+
+            // Read / Write Pulses IO
+            match r.access.as_str() {
+                "RW" | "RWV" => {
+                    s.push_str(&format!("    o_rd.{}{} <= rd({});\n", r.name, insert, reg_num));
+                    s.push_str(&format!("    o_wr.{}{} <= wr({});\n", r.name, insert, reg_num));
+                },
+                "RO" => {
+                },
+                _ => panic!("Illegal access type specified"),
+            }
+
+            reg_num += 1; 
+        }
+        s.push_str("\n");
+    }
 
     s.push_str("end architecture;\n");
     s
@@ -623,8 +667,6 @@ package examp_regs_pkg is
 
     s.push_str(&format!("{header}{libraries}"));
 
-    // TODO: 
-
     let name_up = rm.name.to_ascii_uppercase();
 
     let num_regs: u32 = rm.regs // yay I did something rusty
@@ -651,14 +693,16 @@ package examp_regs_pkg is
     s.pop();
     s.push_str("\n    );\n");
 
-    /*
     // Set up reset values
     s.push_str(&format!("    constant {}_RST_VALS : slv_array_t({}_NUM_REGS-1 downto 0)({} downto 0) := (\n", name_up, name_up, rm.data_width-1));
     let mut reg_num = 0; 
     for r in rm.regs.iter() {
         let array_length = r.array_length.unwrap_or_else(|| 1 ); 
 
-        let mut reset_val = ?????; // TODO: Need to determine full reset value for the reg from the individual fields
+        let reset_val: u32 = r.fields
+            .iter()
+            .map(|f| to_u32(&f.reset_value.clone().unwrap_or_else(|| "0".to_string() )) << f.bit_offset)
+            .sum();
 
         for _ in 1..=array_length {
             s.push_str(&format!("        {} => {},\n", reg_num, to_vhdl_slv(reset_val , rm.data_width).unwrap()));
@@ -667,10 +711,122 @@ package examp_regs_pkg is
     }
     s.pop(); // retroactively remove the last unwanted comma
     s.pop();
-    s.push_str("\n    );\n");
-    */
+    s.push_str("\n    );\n\n");
+
+    s.push_str(
+"    -- -------------------------------------------------------------------------
+    -- Register Fields
+    -- -------------------------------------------------------------------------
+");
+
+    for r in rm.regs.iter() {
+        match &r.desc {
+            Some(d) => s.push_str(&format!("    -- {}\n", d)),
+            None => (),
+        };
+
+        let addr_offset; 
+        let array_length = r.array_length.unwrap_or_else(|| 1 );
+        if array_length > 1 {
+            let step = rm.data_width / 8; 
+            addr_offset = format!("{} to {}+{}*{}", r.addr_offset, r.addr_offset, step, array_length-1); 
+        } else {
+            addr_offset = format!("{}", r.addr_offset); 
+        }
+        s.push_str(&format!("    -- Offset: {}\n", addr_offset));
+        s.push_str(&format!("    -- Access: {}\n", r.access));
+        s.push_str(&format!("    type {}_{}_fld_t is record\n", rm.name, r.name));
+
+        for f in r.fields.iter() {
+            let logic = match f.bit_width {
+                1 => "std_logic".to_string(),
+                _ => format!("std_logic_vector({} downto 0)", f.bit_width-1),
+            };
+            s.push_str(&format!("        {} : {};", f.name, logic));
+            match &f.desc {
+                Some(d) => s.push_str(&format!(" -- {}\n", d)),
+                None => s.push_str("\n"),
+            };
+        }
+        s.push_str("    end record;\n");
+        if array_length > 1 {
+            s.push_str(&format!("    type {}_{}_fld_array_t is array (natural range 0 to {}) of {}_{}_fld_t;\n", rm.name, r.name, array_length-1, rm.name, r.name)); 
+        } 
+        s.push_str("\n");
+    }
+
+    s.push_str(
+"    -- -------------------------------------------------------------------------
+    -- IO Records
+    -- -------------------------------------------------------------------------
+");
+
+    // Control
+    s.push_str(&format!("    type {}_ctl_t is record\n", rm.name));
+    for r in rm.regs.iter() {
+        let array_length = r.array_length.unwrap_or_else(|| 1 );
+        let insert;
+        if array_length > 1 {
+            insert = "array_";
+        } else {
+            insert = ""; 
+        }
+
+        if r.access == "RW" || r.access == "RWV" {
+            s.push_str(&format!("        {} : {}_{}_fld_{}t;\n", r.name, rm.name, r.name, insert));
+        }
+    }
+    s.push_str("    end record;\n\n");
+
+    // Status
+    s.push_str(&format!("    type {}_sts_t is record\n", rm.name));
+    for r in rm.regs.iter() {
+        let array_length = r.array_length.unwrap_or_else(|| 1 );
+        let insert;
+        if array_length > 1 {
+            insert = "array_";
+        } else {
+            insert = ""; 
+        }
+
+        if r.access == "RO" || r.access == "RWV" {
+            s.push_str(&format!("        {} : {}_{}_fld_{}t;\n", r.name, rm.name, r.name, insert));
+        }
+    }
+    s.push_str("    end record;\n\n");
+
+    // Read Pulses
+    s.push_str(&format!("    type {}_rd_t is record\n", rm.name));
+    for r in rm.regs.iter() {
+        let array_length = r.array_length.unwrap_or_else(|| 1 );
+        let logic = match array_length {
+            1 => "std_logic".to_string(),
+            _ => format!("std_logic_vector({} downto 0)", array_length-1),
+        };
+
+        if r.access == "RO" || r.access == "RWV" || r.access == "RW" {
+            s.push_str(&format!("        {} : {};\n", r.name, logic));
+        }
+    }
+    s.push_str("    end record;\n\n");
+
+    // Write Pulses
+    s.push_str(&format!("    type {}_wr_t is record\n", rm.name));
+    for r in rm.regs.iter() {
+        let array_length = r.array_length.unwrap_or_else(|| 1 );
+        let logic = match array_length {
+            1 => "std_logic".to_string(),
+            _ => format!("std_logic_vector({} downto 0)", array_length-1),
+        };
+
+        if r.access == "RWV" || r.access == "RW" {
+            s.push_str(&format!("        {} : {};\n", r.name, logic));
+        }
+    }
+    s.push_str("    end record;\n\n");
 
     s.push_str("end package;\n");
+
     s
 }
 

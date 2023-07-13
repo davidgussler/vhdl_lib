@@ -35,12 +35,12 @@
                     "desc": "Description of fld1",
                     "bit_width": 4,
                     "bit_offset": 8,
-                    "reset_value": "0x0"
+                    "reset_value": "0xA"
                 }
             ]
         },
         {
-            "name": "reg1",
+            "name": "reg1_arr",
             "desc": "This is an example of a RW register array",
             "array_length": 2,
             "access": "RW",
