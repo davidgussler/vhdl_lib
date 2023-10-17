@@ -46,11 +46,6 @@ package gen_utils_pkg is
     type int_array_t is array (natural range <>) of integer;
     type bool_array_t is array (natural range <>) of boolean;
 
-    type regtype_t is (RW_REG, RO_REG);
-    type regtype_array_t is array (natural range <>) of regtype_t;
-
-    type uart_parity_t is (NO_PARITY, EVEN_PARITY, ODD_PARITY); 
-
     -- Interfaces ==============================================================
     -- =========================================================================
     type axil_req_t is record 

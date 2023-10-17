@@ -21,17 +21,8 @@ entity wb_mtime is
         i_clk : in std_logic;
         i_rst : in std_logic;
 
-        -- Wishbone Slave Interface
-        i_wbs_cyc  : in  std_logic;
-        i_wbs_stb  : in  std_logic;
-        i_wbs_adr  : in  std_logic_vector(7 downto 0);
-        i_wbs_wen  : in  std_logic;
-        i_wbs_sel  : in  std_logic_vector(3 downto 0);
-        i_wbs_wdat : in  std_logic_vector(31 downto 0);
-        o_wbs_stl  : out std_logic; 
-        o_wbs_ack  : out std_logic;
-        o_wbs_err  : out std_logic;
-        o_wbs_rdat : out std_logic_vector(31 downto 0);
+        -- Bus Interface
+        -- TODO: 
 
         -- Mtime Interrupt 
         o_mt_irq   : out std_logic
@@ -100,42 +91,7 @@ begin
 
     -- Wishbone Register Interface ---------------------------------------------
     -- -------------------------------------------------------------------------
-    u_wb_regs : entity work.wb_regs
-    generic map (
-        G_DAT_WIDTH_L2   => DAT_WIDTH_L2,
-        G_NUM_REGS       => NUM_REGS,
-        G_NUM_ADR_BITS   => NUM_ADR_BITS,
-        G_REG_ADR        => REG_ADR,
-        G_REG_TYPE       => REG_TYPE,
-        G_REG_RST_VAL    => REG_RST_VAL,
-        G_REG_USED_BITS  => REG_USED_BITS,
-        G_EN_ASSERT      => EN_ASSERT
-    )
-    port map (
-        i_clk => i_clk,
-        i_rst => i_rst,
-
-        -- Wishbone Slave Interface
-        i_wbs_cyc  => i_wbs_cyc ,
-        i_wbs_stb  => i_wbs_stb ,
-        i_wbs_adr  => i_wbs_adr ,
-        i_wbs_wen  => i_wbs_wen ,
-        i_wbs_sel  => i_wbs_sel ,
-        i_wbs_wdat => i_wbs_wdat,
-        o_wbs_stl  => o_wbs_stl ,
-        o_wbs_ack  => o_wbs_ack ,
-        o_wbs_err  => o_wbs_err ,
-        o_wbs_rdat => o_wbs_rdat,
-
-        -- Register Data Interface
-        i_regs => regs_sts ,
-        o_regs => regs_ctrl,
-
-        -- Register R/W Interface
-        o_rd_pulse => open,
-        o_wr_pulse => wr_pulse
-
-    );
+    -- TODO: 
 
     regs_sts(RO_MTIME) <= std_logic_vector(mtime_count);   
 

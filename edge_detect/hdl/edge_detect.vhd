@@ -1,8 +1,8 @@
 -- #############################################################################
--- #  << Glitch Filter >>
+-- #  << Edge Detect >>
 -- # ===========================================================================
--- # File     : glitch_filter.vhd
--- # Author   : David Gussler - david.gussler@proton.me
+-- # File     : edge_detect.vhd
+-- # Author   : David Gussler - davidnguss@gmail.com
 -- # Language : VHDL '08
 -- # ===========================================================================
 -- # BSD 2-Clause License
@@ -31,49 +31,52 @@
 -- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 -- #  POSSIBILITY OF SUCH DAMAGE.
 -- # ===========================================================================
--- # Ensures that an input is stable for a given number of clockcycles before
--- # transitioning the filtered output.
--- # 
+-- # Simple edge detector. Pulses on a positive edge, negative edge, or both.
 -- #############################################################################
 
 library ieee;
-context ieee.ieee_std_context;
-use ieee.math_real.all;
+use ieee.std_logic_1164.all;
 
-entity glitch_filter is
-    generic (
-        G_STABLE_CLKS : positive := 16; 
-        G_RST_VAL : std_logic := '0'
+entity edge_detect is 
+    generic(
+        -- 0 pulses on negative edge
+        -- 1 pulses on positive edge
+        -- 2 pulses on negative and positive edges 
+        G_POLARITY : integer range 0 to 2 := 1; 
     );
-    port (
+    port(
         i_clk : in std_logic;
         i_rst : in std_logic;
-        
-        i_glitchy : in std_logic;
-        o_filtered : out std_logic
-    );
-end entity glitch_filter;
 
-architecture rtl of glitch_filter is
-    signal samples : std_logic_vector(1 downto 0);
-    signal cnt : integer range 0 to G_STABLE_CLKS-1; 
+        i_in : in std_logic;
+        o_out : out std_logic
+    );
+end entity;
+
+
+architecture rtl of edge_detect is
+
+    signal in_ff : std_logic; 
+
 begin
-    process (i_clk) is 
+
+    prc_ff : process (i_clk)
     begin
         if rising_edge(i_clk) then
-            if (i_rst) then
-                o_filtered <= G_RST_VAL;
-                cnt <= 0;
+            if i_rst then
+                in_ff <= '0';
             else
-                samples <= i_glitchy & samples(1);
-                if (xor samples) then 
-                    cnt <= 0;
-                elsif (cnt < G_STABLE_CLKS-1) then
-                    cnt <= cnt + 1;
-                else 
-                    o_filtered <= samples(0);
-                end if; 
+                in_ff <= i_in;
             end if;
         end if;
     end process;
+
+    gen_polarity : if 0 generate
+        o_out <= in_ff and not i_in; 
+    elsif 1 generate 
+        o_out <= not in_ff and i_in; 
+    else generate
+        o_out <= in_ff xor i_in; 
+    end generate;
+
 end architecture;

@@ -1,7 +1,7 @@
 -- #############################################################################
--- #  << AXI-Lite to Bus Testbench >>
+-- #  << AXI Example Regs Testbench >>
 -- # ===========================================================================
--- # File     : axil_to_bus_tb.vhd
+-- # File     : axi_examp_regs.vhd
 -- # Author   : David Gussler - david.gussler@proton.me
 -- # Language : VHDL '08
 -- # ===========================================================================
@@ -49,11 +49,11 @@ use osvvm.RandomPkg.all;
 use work.gen_utils_pkg.all;
 use work.examp_regs_pkg.all;
 
-entity axil_pipe_tb is
+entity axi_examp_regs_tb is
     generic (runner_cfg : string);
 end entity;
 
-architecture tb of axil_pipe_tb is
+architecture tb of axi_examp_regs_tb is
     -- Simulation Signals / Constants
     constant CLK_PERIOD  : time := 10 ns; 
     constant CLK_FREQ_HZ : positive := 100000000; 

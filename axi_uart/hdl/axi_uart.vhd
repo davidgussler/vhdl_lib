@@ -53,17 +53,9 @@ entity wb_uart is
         i_clk : in std_logic;
         i_rst : in std_logic;
 
-        -- Wishbone Slave Interface
-        i_wbs_cyc : in  std_logic;
-        i_wbs_stb : in  std_logic;
-        i_wbs_adr : in  std_logic_vector(3 downto 0);
-        i_wbs_wen : in  std_logic;
-        i_wbs_sel : in  std_logic_vector(3 downto 0);
-        i_wbs_dat : in  std_logic_vector(31 downto 0);
-        o_wbs_stl : out std_logic; 
-        o_wbs_ack : out std_logic;
-        o_wbs_err : out std_logic;
-        o_wbs_dat : out std_logic_vector(31 downto 0);
+        -- AXI4-Lite Slave
+        i_s_axil : in  axil_req_t;
+        o_s_axil : out axil_resp_t;
 
         -- UART Interface 
         i_uart_rx  : in  std_logic;
@@ -119,7 +111,7 @@ begin
     end process;
 
 
-    u_wb_uart_regs : entity work.wb_uart_regs
+    u_wb_uart_regs : entity work.axi_uart_regs
     generic map (
         G_DATA_WIDTH => G_DATA_WIDTH
     )
@@ -127,16 +119,8 @@ begin
         i_clk => i_clk,
         i_rst => i_rst,
 
-        i_wbs_cyc => i_wbs_cyc,
-        i_wbs_stb => i_wbs_stb,
-        i_wbs_adr => i_wbs_adr,
-        i_wbs_wen => i_wbs_wen,
-        i_wbs_sel => i_wbs_sel,
-        i_wbs_dat => i_wbs_dat,
-        o_wbs_stl => o_wbs_stl,
-        o_wbs_ack => o_wbs_ack,
-        o_wbs_err => o_wbs_err,
-        o_wbs_dat => o_wbs_dat,
+        i_s_axil => i_s_axil,
+        o_s_axil => o_s_axil,
 
         i_rx_fifo_data     => rx_fifo_data,
         i_rx_fifo_valid    => rx_fifo_valid,
@@ -171,7 +155,7 @@ begin
     );
   
     -- Rx Filter
-    u_glitch_filter : entity work.glitch_filter
+    u_glitch_filter : entity work.stable_filter
     generic map (
         G_STABLE_CLKS => 16,
         G_RST_VAL => '0'

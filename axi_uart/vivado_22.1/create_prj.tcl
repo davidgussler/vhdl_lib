@@ -7,21 +7,21 @@
 #
 ################################################################################
 
-# Variables 
+# Variables
 set prj_name "wb_uart"
 set part_num "xc7a35tcpg236-1"
 
 # Create the project
 create_project -force $prj_name ./$prj_name -part $part_num
 
-# Add project source files 
+# Add project source files
 add_files -fileset sources_1 [ glob \
-    ./../hdl/wb_uart.vhd \
-    ./../hdl/wb_uart_regs.vhd \
+    ./../hdl/axi_uart.vhd \
+    ./../hdl/axi_uart_regs.vhd \
     ./../../utils/hdl/gen_utils_pkg.vhd \
     ./../../uart/hdl/uart.vhd \
     ./../../fifo/hdl/fifo.vhd \
-    ./../../glitch_filter/hdl/glitch_filter.vhd \
+    ./../../glitch_filter/hdl/stable_filter.vhd \
     ./../../sync_bit/hdl/sync_bit.vhd \
     ./../../wb_regs/hdl/wb_regs.vhd \
 ]

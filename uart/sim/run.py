@@ -21,7 +21,7 @@ lib.add_source_files("./*.vhd")
 lib.add_source_files("../../utils/hdl/gen_utils_pkg.vhd")
 
 # Debugging visibility 
-lib.set_compile_option("modelsim.vcom_flags", ["+acc",  "-O0"])
+#lib.set_compile_option("modelsim.vcom_flags", ["+acc",  "-O0"])
 
 # Run vunit function
 vu.main()

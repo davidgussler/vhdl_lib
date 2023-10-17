@@ -49,17 +49,9 @@ entity wb_uart_regs is
         i_clk : in std_logic;
         i_rst : in std_logic;
 
-        -- Wishbone Slave Interface
-        i_wbs_cyc : in  std_logic;
-        i_wbs_stb : in  std_logic;
-        i_wbs_adr : in  std_logic_vector(3 downto 0);
-        i_wbs_wen : in  std_logic;
-        i_wbs_sel : in  std_logic_vector(3 downto 0);
-        i_wbs_dat : in  std_logic_vector(31 downto 0);
-        o_wbs_stl : out std_logic; 
-        o_wbs_ack : out std_logic;
-        o_wbs_err : out std_logic;
-        o_wbs_dat : out std_logic_vector(31 downto 0);
+        -- AXI4-Lite Slave
+        i_s_axil : in  axil_req_t;
+        o_s_axil : out axil_resp_t;
 
         -- Register Breakout
         i_rx_fifo_data     : in  std_logic_vector(G_DATA_WIDTH-1 downto 0);
@@ -83,7 +75,7 @@ end entity;
 
 architecture rtl of wb_uart_regs is
 
-    -- wb_regs Constants & Signals ----------------------------------------------
+    -- regs Constants & Signals ----------------------------------------------
     -- =========================================================================
 
     -- Name Register Indexes ---------------------------------------------------
@@ -110,12 +102,10 @@ architecture rtl of wb_uart_regs is
     constant CTL_ENABLE_INTR        : integer := 4;
 
 
-    -- wb_regs generics --------------------------------------------------------
+    -- regs generics --------------------------------------------------------
     -- -------------------------------------------------------------------------
-    constant DAT_WIDTH_L2 : positive := 5;
     constant NUM_REGS     : positive := 4;
     constant NUM_ADR_BITS : positive := 4;
-    constant EN_ASSERT    : boolean  := TRUE;
 
     constant REG_ADR :
         slv_array_t(NUM_REGS-1 downto 0)(NUM_ADR_BITS-1 downto 0) :=
@@ -126,76 +116,51 @@ architecture rtl of wb_uart_regs is
         ctl_REG => X"C"
     );
 
-    constant REG_TYPE : 
-        regtype_array_t(NUM_REGS-1 downto 0) :=
-    (
-        RX_FIFO => RO_REG,
-        TX_FIFO => RW_REG,
-        STS_REG => RO_REG,
-        CTL_REG => RW_REG
-    );
-
     constant REG_RST_VAL :
         slv_array_t(NUM_REGS-1 downto 0)((2 ** DAT_WIDTH_L2)-1 downto 0) :=
     (
         others  => (others=>'0')
     );
 
-    constant REG_USED_BITS :
-        slv_array_t(NUM_REGS-1 downto 0)((2 ** DAT_WIDTH_L2)-1 downto 0) :=
-    (
-        RX_FIFO => X"0000_00FF",
-        TX_FIFO => X"FFFF_00FF",
-        STS_REG => X"0000_00FF",
-        CTL_REG => X"0000_0013"
-    );
-
-    signal regs_sts : slv_array_t(NUM_REGS-1 downto 0)((2 ** DAT_WIDTH_L2)-1 downto 0);
-    signal regs_ctl : slv_array_t(NUM_REGS-1 downto 0)((2 ** DAT_WIDTH_L2)-1 downto 0);
+    signal regs_sts : slv_array_t(NUM_REGS-1 downto 0)(31 downto 0) := (others => (others => '0') ) ;
+    signal regs_ctl : slv_array_t(NUM_REGS-1 downto 0)(31 downto 0);
     signal rd_pulse : std_logic_vector(NUM_REGS-1 downto 0);
     signal wr_pulse : std_logic_vector(NUM_REGS-1 downto 0);
 
+
+    signal bus_req : bus_req_t; 
+    signal bus_rsp : bus_resp_t;
+
 begin
 
-    -- Register Interface ------------------------------------------------------
-    -- -------------------------------------------------------------------------
-    register_interface : entity work.wb_regs(rtl)
-    generic map (
-        G_DAT_WIDTH_L2   => DAT_WIDTH_L2,
-        G_NUM_REGS       => NUM_REGS,
-        G_NUM_ADR_BITS   => NUM_ADR_BITS,
-        G_REG_ADR        => REG_ADR,
-        G_REG_TYPE       => REG_TYPE,
-        G_REG_RST_VAL    => REG_RST_VAL,
-        G_REG_USED_BITS  => REG_USED_BITS,
-        G_EN_ASSERT      => EN_ASSERT
-    )
+    axil_to_bus_inst : entity work.axil_to_bus
     port map (
         i_clk => i_clk,
         i_rst => i_rst,
-
-        -- Wishbone Slave Interface
-        i_wbs_cyc => i_wbs_cyc,
-        i_wbs_stb => i_wbs_stb,
-        i_wbs_adr => i_wbs_adr,
-        i_wbs_wen => i_wbs_wen,
-        i_wbs_sel => i_wbs_sel,
-        i_wbs_dat => i_wbs_dat,
-        o_wbs_stl => o_wbs_stl,
-        o_wbs_ack => o_wbs_ack,
-        o_wbs_err => o_wbs_err,
-        o_wbs_dat => o_wbs_dat,
-
-        -- Register Interface
-        i_regs => regs_sts,
-        o_regs => regs_ctl,
-
-        -- Register R/W Interface
-        o_rd_pulse => rd_pulse,
-        o_wr_pulse => wr_pulse
-
+        i_s_axil => i_s_axil,
+        o_s_axil => o_s_axil,
+        i_m_bus => bus_rsp,
+        o_m_bus => bus_req
     );
 
+    reg_bank_inst : entity work.reg_bank
+    generic map (
+      G_NUM_REGS  => NUM_REGS,
+      G_ADDR_BITS => NUM_ADR_BITS,
+      G_ADDRS     => REG_ADR,
+      G_RST_VALS  => REG_RST_VAL
+    )
+    port map (
+      i_clk => i_clk,
+      i_rst => i_rst,
+      i_s_bus => bus_req,
+      o_s_bus => bus_rsp,
+      o_ctl => regs_ctl,
+      i_sts => regs_sts,
+      o_wr => wr_pulse,
+      o_rd => rd_pulse
+    );
+    
 
     -- Signal breakout ---------------------------------------------------------
     -- -------------------------------------------------------------------------
