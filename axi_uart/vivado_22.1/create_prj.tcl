@@ -8,7 +8,7 @@
 ################################################################################
 
 # Variables
-set prj_name "wb_uart"
+set prj_name "axi_uart"
 set part_num "xc7a35tcpg236-1"
 
 # Create the project
@@ -23,7 +23,7 @@ add_files -fileset sources_1 [ glob \
     ./../../fifo/hdl/fifo.vhd \
     ./../../glitch_filter/hdl/stable_filter.vhd \
     ./../../sync_bit/hdl/sync_bit.vhd \
-    ./../../wb_regs/hdl/wb_regs.vhd \
+    ./../../reg_bank/hdl/reg_bank.vhd \
 ]
 
 add_files -fileset constrs_1 timing_constrs.xdc
