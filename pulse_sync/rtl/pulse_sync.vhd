@@ -1,5 +1,5 @@
 
-entity sync_pulse is
+entity pulse_sync is
    generic (
       N_FLOPS : integer range 2 to 5 := 2;
       ACT_LVL : std_logic := '1'; -- 1 for active high, 0 for active low
@@ -14,7 +14,7 @@ entity sync_pulse is
    );
 end entity;
 
-architecture rtl of sync_pulse is
+architecture rtl of pulse_sync is
    constant RST_LVL := not ACT_LVL; 
    signal sync_regs : std_logic_vector(N_FLOPS-1 downto 0) := (others=>RST_LVL);
    signal toggled   : std_logic := RST_LVL; 

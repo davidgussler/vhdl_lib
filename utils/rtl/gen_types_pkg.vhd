@@ -1,13 +1,13 @@
 -- #############################################################################
--- #  << General VHDL Utilities >>
+-- #  << General Types Package >>
 -- # ===========================================================================
--- # File     : gen_utils_pkg.vhd
--- # Author   : David Gussler - david.gussler@proton.me
+-- # File     : gen_types_pkg.vhd
+-- # Author   : David Gussler
 -- # Language : VHDL '08
 -- # ===========================================================================
 -- # BSD 2-Clause License
 -- # 
--- # Copyright (c) 2022, David Gussler. All rights reserved.
+-- # Copyright (c) 2022-2024, David Gussler. All rights reserved.
 -- # 
 -- # Redistribution and use in source and binary forms, with or without
 -- # modification, are permitted provided that the following conditions are met:
@@ -38,13 +38,13 @@
 library ieee;
 use ieee.std_logic_1164.all;
 
-package gen_utils_pkg is
+package gen_types_pkg is
 
     -- Types ===================================================================
     -- =========================================================================
-    type slv_array_t is array (natural range <>) of std_logic_vector;
-    type int_array_t is array (natural range <>) of integer;
-    type bool_array_t is array (natural range <>) of boolean;
+    type slv_arr_t is array (natural range <>) of std_logic_vector;
+    type int_arr_t is array (natural range <>) of integer;
+    type bool_arr_t is array (natural range <>) of boolean;
 
     -- Interfaces ==============================================================
     -- =========================================================================

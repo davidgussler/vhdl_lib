@@ -1,13 +1,13 @@
 -- #############################################################################
--- #  << Sync Bit >>
+-- #  << Debounce >>
 -- # ===========================================================================
--- # File     : sync_bit.vhd
--- # Author   : David Gussler - david.gussler@proton.me
+-- # File     : debounce.vhd
+-- # Author   : David Gussler
 -- # Language : VHDL '08
 -- # ===========================================================================
 -- # BSD 2-Clause License
 -- # 
--- # Copyright (c) 2023, David Gussler. All rights reserved.
+-- # Copyright (c) 2023-2024, David Gussler. All rights reserved.
 -- # 
 -- # Redistribution and use in source and binary forms, with or without
 -- # modification, are permitted provided that the following conditions are met:
@@ -31,51 +31,46 @@
 -- # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 -- #  POSSIBILITY OF SUCH DAMAGE.
 -- # ===========================================================================
--- # Simple 1-bit synchronizer.
--- # 
+-- # Ensures that an input is stable for COUNT_G clockcycles before
+-- # transitioning the output. 
 -- #############################################################################
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity sync_bit is
-   generic (
-      G_N_FLOPS : integer range 2 to 5 := 2;
-      G_RST_VAL : std_logic := '0'
-   );
-   port (
-      i_clk : in  std_logic;
-      i_rst : in  std_logic;
-      i_async : in  std_logic;
-      o_sync : out std_logic
-   );
+entity debounce is
+  generic (
+    G_RST_VAL : std_logic := '0'; 
+    G_COUNT : positive := 16
+  );
+  port (
+    clk_i : in std_logic;
+    srst_i : in std_logic;
+    in_i : in std_logic;
+    out_o : out std_logic
+  );
 end entity;
 
-architecture rtl of sync_bit is
-   signal sync_regs : std_logic_vector(G_N_FLOPS-1 downto 0);
-
-   -- Vivado Synthesis Attributes --
-   -- tells synthesizer that these are synchronizing registers
-   attribute ASYNC_REG : string;
-   attribute ASYNC_REG of sync_regs : signal is "TRUE";
-
-   -- tells the synthesizer to not use CLB shift registers 
-   -- for sync_regs, which looks like a shift register 
-   attribute SHREG_EXTRACT : string;
-   attribute SHREG_EXTRACT of sync_regs : signal is "NO";
+architecture rtl of debounce is
+  signal samples : std_logic_vector(1 downto 0);
+  signal cnt : integer range 0 to G_COUNT-1; 
 begin
-   o_sync <= sync_regs(0);
-
-   -- sync flops
-   process (i_clk)
-   begin
-      if rising_edge(i_clk) then
-         if (i_rst = '1') then
-            sync_regs <= (others=>G_RST_VAL); 
-         else 
-            sync_regs <= i_async & sync_regs(G_N_FLOPS-1 downto 1);
-         end if;
+  prc_debounce : process (clk_i)
+  begin
+    if rising_edge(clk_i) then
+      samples <= samples(0) & in_i;
+      if xor samples then 
+        cnt <= 0;
+      elsif cnt < G_COUNT-1 then
+        cnt <= cnt + 1;
+      else 
+        out_o <= samples(0);
       end if; 
-   end process;
+      if srst_i then
+        out_o <= G_RST_VAL;
+        cnt <= 0;
+      end if; 
+    end if;
+  end process;
 end architecture;

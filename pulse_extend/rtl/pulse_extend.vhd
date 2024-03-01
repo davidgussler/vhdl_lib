@@ -42,47 +42,44 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity pulse_extend is 
-    generic(
+  generic(
         -- '1' -> '1' as input pulse, '1' as output pulse, output resets to '0' 
         -- '0' -> '0' as input pulse, '0' as output pulse, output resets to '1'
-        G_POLARITY : std_logic := '1';
+           G_POLARITY : std_logic := '1';
 
         -- Length of the output pulse in clockcycles
-        G_COUNT : positive := 4
-    );
-    port(
+           G_COUNT : positive := 4
+         );
+  port(
         i_clk : in std_logic;
         i_rst : in std_logic;
 
         i_in : in std_logic;
         o_out : out std_logic
-    );
+      );
 end entity;
 
-
 architecture rtl of pulse_extend is
-
-    signal cnt : integer range 0 to G_COUNT-1;
-
+  signal cnt : integer range 0 to G_COUNT-1;
 begin
-    process (i_clk)
-    begin
-        if rising_edge(i_clk) then
-            if i_rst then
-                cnt <= 0; 
-                o_out <= not G_POLARITY;
-            else
-                if i_in = G_POLARITY then 
-                    cnt <= G_COUNT-1; 
-                    o_out <= G_POLARITY;
-                elsif cnt = 0 then
-                    cnt <= 0;
-                    o_out <= not G_POLARITY;
-                else 
-                    cnt <= cnt - 1; 
-                    o_out <= G_POLARITY;
-                end if; 
-            end if;
-        end if;
-    end process;
+  process (i_clk)
+  begin
+    if rising_edge(i_clk) then
+      if i_rst then
+        cnt <= 0; 
+        o_out <= not G_POLARITY;
+      else
+        if i_in = G_POLARITY then 
+          cnt <= G_COUNT-1; 
+          o_out <= G_POLARITY;
+        elsif cnt = 0 then
+          cnt <= 0;
+          o_out <= not G_POLARITY;
+        else 
+          cnt <= cnt - 1; 
+          o_out <= G_POLARITY;
+        end if; 
+      end if;
+    end if;
+  end process;
 end architecture;
