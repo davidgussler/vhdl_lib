@@ -7,7 +7,6 @@
 -- # unrelated bits to a common clock.  
 -- # ===========================================================================
 -- # Copyright (c) 2023-2024, David Gussler. All rights reserved.
--- #
 -- # You may use, distribute and modify this code under the
 -- # terms of the BSD 2-Clause license. You should have received a copy of the 
 -- # license with this file. If not, please message: davndnguss@gmail.com. 
