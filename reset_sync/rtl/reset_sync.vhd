@@ -36,17 +36,17 @@ architecture rtl of reset_sync is
 
   type sr_t is array (natural range 0 to G_SYNC_LEN) of
     std_logic_vector(G_NUM_SRST - 1 downto 0);
-
   signal sr : sr_t := (others => G_SRST_LVL);
 
+  -- Xilinx attributes
   attribute ASYNC_REG       : string;
   attribute ASYNC_REG of sr : signal is "TRUE";
-
   attribute SHREG_EXTRACT       : string;
   attribute SHREG_EXTRACT of sr : signal is "NO";
 
-  -- returns 1 if any of the bits in arst_slv match the corresponding bit in
-  -- arst_lvl
+  --
+  -- Returns 1 if any of the async reset bits are asserted
+  --
   function fn_arst (
     arst_slv : std_logic_vector;
     arst_lvl : std_logic_vector
@@ -75,6 +75,7 @@ begin
           sr(sr_bit)(idx) <= G_SRST_LVL(idx);
         end loop;
       elsif rising_edge(clk_i(idx)) then
+        sr(0)(idx) <= not G_SRST_LVL(idx); 
         for sr_bit in 1 to G_SYNC_LEN loop
           sr(sr_bit)(idx) <= sr(sr_bit-1)(idx);
         end loop;
@@ -84,8 +85,5 @@ begin
     srst_o(idx) <= sr(G_SYNC_LEN)(idx);
   
   end generate;
-
-
-  
 
 end architecture;

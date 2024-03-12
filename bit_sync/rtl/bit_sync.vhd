@@ -34,13 +34,12 @@ end entity;
 architecture rtl of bit_sync is
 
   type sr_t is array (natural range 0 to G_SYNC_LEN) of
-      std_logic_vector(G_WIDTH - 1 downto 0);
+    std_logic_vector(async_i'length - 1 downto 0);
   signal sr : sr_t := (others => G_RST_VAL);
 
   -- Xilinx Attributes
   attribute ASYNC_REG       : string;
   attribute ASYNC_REG of sr : signal is "TRUE";
-
   attribute SHREG_EXTRACT       : string;
   attribute SHREG_EXTRACT of sr : signal is "NO";
 
