@@ -17,8 +17,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-use work.gen_types_pkg.all;
-
 entity bit_sync is
   generic (
     G_SYNC_LEN : positive                               := 1;
@@ -36,7 +34,7 @@ end entity;
 architecture rtl of bit_sync is
 
   type sr_t is array (natural range 0 to G_SYNC_LEN) of
-  std_logic_vector(async_i'length - 1 downto 0);
+      std_logic_vector(G_WIDTH - 1 downto 0);
   signal sr : sr_t := (others => G_RST_VAL);
 
   -- Xilinx Attributes
